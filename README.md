@@ -25,6 +25,20 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Scalable project structure
+
+This repo uses Expo Router, so **routes live in `app/`**. For scalability, app code can be organized under `src/` by domain feature.
+
+- `app/`: routes, route layouts, navigation wrappers (Expo Router)
+- `src/features/`: domain modules (e.g. `students/`, `courses/`)
+- `src/shared/`: reusable UI + utilities
+- `src/services/`: integrations (storage, analytics, notifications)
+- `src/lib/`: low-level clients/wrappers
+
+Import convention (keeps your existing `@/...` alias working):
+
+- Prefer `@/src/...` for new modules.
+
 ## Get a fresh project
 
 When you're ready, run:
