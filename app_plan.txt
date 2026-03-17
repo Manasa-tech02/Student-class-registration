@@ -4,6 +4,7 @@ Stack
 - Expo SDK 54 + React Native 0.81
 - Expo Router (file-based routing) + typed routes enabled
 - TypeScript (strict)
+ - Node.js backend (Express + SQLite + JWT)
 
 Routing (Expo Router)
 - app/_layout.tsx
@@ -33,6 +34,9 @@ Scalable code organization
       - types.ts (Student)
       - data/mockStudents.ts
       - screens/StudentListScreen.tsx
+    - auth/
+      - components/AuthLayout.tsx, AuthTextField.tsx
+      - screens/LoginScreen.tsx, SignUpScreen.tsx
   - shared/ (planned): reusable UI + utilities (no business rules)
   - services/ (planned): integrations (storage, analytics, notifications)
   - lib/ (planned): low-level clients/wrappers
@@ -52,6 +56,13 @@ Hooks + theme
 Assets + config
 - assets/images/ (icons/splash/favicons referenced by app.json)
 - app.json (Expo config, expo-router plugin, typedRoutes enabled)
+
+Backend
+- backend/
+  - package.json (Express, SQLite, JWT, bcrypt)
+  - src/db.js (SQLite database + migrations)
+  - src/authRoutes.js (register, login, refresh, logout + audit logging)
+  - src/server.js (Express app, CORS, JSON body parsing)
 
 Import conventions
 - TS alias: @/* -> project root
