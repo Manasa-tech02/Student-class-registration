@@ -23,11 +23,10 @@ const loginSchema = z.object({
 });
 
 authRouter.post("/signup", async (req, res, next) => {
-  const input = signupSchema.parse(req.body);
-
-  const hashedPassword = await bcrypt.hash(input.password, 10);
-
   try {
+    const input = signupSchema.parse(req.body);
+
+    const hashedPassword = await bcrypt.hash(input.password, 10);
     const user = await prisma.user.create({
       data: {
         first_name: input.first_name,
@@ -54,44 +53,57 @@ authRouter.post("/signup", async (req, res, next) => {
 });
 
 authRouter.post("/login", async (req, res, next) => {
-  const input = loginSchema.parse(req.body);
+  try {
+    const input = loginSchema.parse(req.body);
 
-  const user = await prisma.user.findUnique({
-    where: { email: input.email },
-    select: { id: true, role: true, password: true },
-  });
+    const user = await prisma.user.findUnique({
+      where: { email: input.email },
+      select: { id: true, role: true, password: true },
+    });
 
-  if (!user) {
-    return next(new HttpError(401, "No account found with that email address"));
+    if (!user) {
+      return next(new HttpError(401, "No account found with that email address"));
+    }
+
+    const ok = await bcrypt.compare(input.password, user.password);
+    if (!ok) {
+      return next(new HttpError(401, "Incorrect password. Please try again"));
+    }
+
+    const token = signAccessToken(user.id, user.role);
+    return res.json({ token });
+  } catch (err) {
+    return next(err);
   }
-
-  const ok = await bcrypt.compare(input.password, user.password);
-  if (!ok) {
-    return next(new HttpError(401, "Incorrect password. Please try again"));
-  }
-
-  const token = signAccessToken(user.id, user.role);
-  return res.json({ token });
 });
 
 authRouter.get("/me", requireAuth, async (req, res, next) => {
-  const userId = req.user?.id;
-  if (!userId) return next(new HttpError(401, "Unauthorized"));
+  try {
+    const userId = req.user?.id;
+    if (!userId) return next(new HttpError(401, "Unauthorized"));
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      first_name: true,
-      last_name: true,
-      email: true,
-      student_id: true,
-      role: true,
-      created_at: true,
-    },
-  });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        student_id: true,
+        role: true,
+        created_at: true,
+      },
+    });
 
-  if (!user) return next(new HttpError(404, "User not found"));
-  return res.json({ user });
+    if (!user) return next(new HttpError(404, "User not found"));
+    return res.json({ user });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Confirms an authenticated logout; client must still delete the stored access token. */
+authRouter.post("/logout", requireAuth, (_req, res) => {
+  return res.status(204).send();
 });
 

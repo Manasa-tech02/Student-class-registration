@@ -40,7 +40,7 @@ export function createApp() {
 
   // Error handler (keep it last)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((err: unknown, _req: express.Request, res: express.Response) => {
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     let statusCode = 500;
     let message = "Internal Server Error";
     let details: unknown;
