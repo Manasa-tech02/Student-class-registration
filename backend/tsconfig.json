@@ -11,6 +11,6 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src", "generated"]
+  "include": ["src", "generated", "prisma.config.ts"]
 }
 

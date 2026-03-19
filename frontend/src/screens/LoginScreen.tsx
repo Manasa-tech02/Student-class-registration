@@ -9,7 +9,7 @@ function isValidEmail(value: string) {
 }
 
 export function LoginScreen(props: {
-  onSignedIn: (token: string) => void;
+  onSignedIn: (token: string, refreshToken: string) => void;
   onGoToSignup: () => void;
 }) {
   const [email, setEmail] = useState("");
@@ -83,7 +83,7 @@ export function LoginScreen(props: {
             setSubmitting(true);
             try {
               const result = await login({ email: email.trim(), password });
-              props.onSignedIn(result.token);
+              props.onSignedIn(result.token, result.refreshToken);
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));
             } finally {

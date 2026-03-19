@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { ZodError } from "zod";
 import { healthRouter } from "./routes/health";
@@ -18,6 +19,7 @@ export function createApp() {
     }),
   );
   app.use(helmet());
+  app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
   app.use(express.json());
 
   app.use("/health", healthRouter);

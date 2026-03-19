@@ -20,6 +20,7 @@ export function DashboardScreen(props: {
   user: User;
   token: string;
   onBackToLogin?: () => void;
+  onGetCourses?: (token: string) => Promise<{ courses: Course[] }>;
 }) {
   const { user, token } = props;
   const [view, setView] = useState<"home" | "courses">("home");
@@ -43,7 +44,8 @@ export function DashboardScreen(props: {
 
     (async () => {
       try {
-        const res = await getCourses(token);
+        const fetchCourses = props.onGetCourses ?? getCourses;
+        const res = await fetchCourses(token);
         if (cancelled) return;
         setCourses(res.courses);
       } catch (e) {
