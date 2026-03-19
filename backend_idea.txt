@@ -1,0 +1,211 @@
+Build a production-ready backend for a Student Course Registration System.
+
+Tech Stack:
+
+* Node.js (latest LTS)
+* Express.js
+* PostgreSQL
+* Prisma ORM (preferred)
+* JWT for authentication
+* bcrypt for password hashing
+* dotenv for environment variables
+
+---
+
+FEATURE REQUIREMENTS
+
+1. AUTHENTICATION
+
+Signup API:
+POST /auth/signup
+
+Fields:
+
+* first_name
+* last_name
+* email (unique)
+* student_id (unique)
+* password
+
+Requirements:
+
+* Validate input (use Zod or Joi)
+* Hash password using bcrypt
+* Prevent duplicate email & student_id
+* Store securely in DB
+* Return JWT token
+
+Login API:
+POST /auth/login
+
+Fields:
+
+* email
+* password
+
+Requirements:
+
+* Validate credentials
+* Compare hashed password
+* Return JWT token
+
+---
+
+2. DATABASE DESIGN (PostgreSQL)
+
+Students Table:
+
+* id (PK)
+* first_name
+* last_name
+* email (unique)
+* student_id (unique)
+* password (hashed)
+* role (default: "student", optional "admin")
+* created_at
+
+Courses Table:
+
+* id (PK)
+* class_name
+* professor
+* duration
+* rating
+* description
+* capacity
+* created_at
+
+Enrollments Table:
+
+* id (PK)
+* student_id (FK)
+* course_id (FK)
+* created_at
+* UNIQUE(student_id, course_id)
+
+---
+
+3. COURSE APIs
+
+GET /courses
+
+* Public or authenticated
+* Return all courses
+* Include available seats (capacity - enrolled count)
+
+POST /courses (Admin only)
+
+* Create a course
+* Validate input
+
+---
+
+4. ENROLLMENT APIs
+
+POST /enroll (Authenticated)
+
+* Enroll student into course
+* Must:
+
+  * Prevent duplicate enrollment
+  * Check capacity
+  * Use database transaction
+* Return success message
+
+DELETE /enroll (Authenticated)
+
+* Drop a course
+
+GET /my-courses (Authenticated)
+
+* Return all courses of logged-in student
+
+---
+
+5. SECURITY (VERY IMPORTANT)
+
+* Use JWT middleware to protect routes
+* Role-based access (admin vs student)
+* Hash passwords using bcrypt
+* Use Helmet for security headers
+* Use express-rate-limit to prevent abuse
+* Validate all inputs (Zod/Joi)
+* Never expose sensitive data
+* Use CORS properly
+
+---
+
+6. SCALABILITY & ARCHITECTURE
+
+Create clean folder structure:
+
+src/
+controllers/
+routes/
+services/
+middleware/
+utils/
+config/
+prisma/
+
+Follow best practices:
+
+* Controller → handles request/response
+* Service → business logic
+* Middleware → auth, validation
+* Use async/await
+* Use connection pooling (handled by Prisma)
+
+---
+
+7. ERROR HANDLING
+
+* Centralized error handler middleware
+* Proper HTTP status codes
+* Meaningful error messages
+
+---
+
+8. AVAILABILITY
+
+* Health check endpoint:
+  GET /health
+
+* Graceful error handling
+
+* Logging (console or winston)
+
+---
+
+9. EXTRA FEATURES
+
+* Seed script for courses
+* Prevent race conditions using DB transaction
+* Add indexes for performance
+* Return proper JSON responses
+
+---
+
+OUTPUT REQUIREMENTS
+
+Claude should generate:
+
+1. Full working backend code
+2. Prisma schema
+3. Folder structure
+4. Middleware (auth + error handling)
+5. Controllers & services
+6. Example .env file
+7. Sample seed data
+8. Step-by-step setup instructions
+9. Postman API examples
+
+---
+
+IMPORTANT:
+
+* Code must be clean, modular, and production-ready
+* Follow industry best practices
+* Use proper naming conventions
+* Add comments explaining complex parts
+*

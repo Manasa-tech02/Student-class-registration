@@ -1,0 +1,10 @@
+I'm building a student Registration app 
+with the following screens:
+
+Screen 1 — Login / onboarding is the entry point where a student authenticates with their university credentials.
+Screen 2 — Home dashboard is the first thing students see after login. It shows the current semester context, quick stats, and entry points to the main features.
+Screen 3 — Course catalog (browse & search) is where students discover classes. They can filter by department, day/time, credits, and availability.
+Screen 4 — Class detail is what students see when they tap a class. It has everything they need to make an enrollment decision: description, schedule, instructor, prerequisites, and the register button.
+Screen 5 — Weekly schedule view is the student's personalized timetable. This is the screen they'll check most often — it shows all enrolled classes laid out across the week.
+Screen 6 — My enrollments is where students manage their registered classes — they can drop a class, join a waitlist, or swap sections.
+
