@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
-  Dimensions,
   Modal,
   Pressable,
   StyleSheet,
@@ -9,11 +9,12 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { MainScreenProps } from "../navigation/types";
+import type { AdminScreenProps } from "../../navigation/types";
 import { useSelector, useDispatch } from "react-redux";
-import { logout } from "../features/auth/authSlice";
-import { clearTokens } from "../authTokenStorage";
-import type { RootState } from "../store/store";
+import { logout } from "../../features/auth/authSlice";
+import { clearTokens } from "../../authTokenStorage";
+import type { RootState } from "../../store/store";
+import { useGetAdminStatsQuery } from "../../features/admin/adminApi";
 
 const SIDEBAR_WIDTH = 280;
 
@@ -28,11 +29,11 @@ function getInitials(first?: string, last?: string) {
   const a = first?.trim()?.[0] ?? "";
   const b = last?.trim()?.[0] ?? "";
   const initials = `${a}${b}`.toUpperCase();
-  return initials.length ? initials : "U";
+  return initials.length ? initials : "A";
 }
 
-export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
-  const { user } = useSelector((state: RootState) => state.auth);
+export function AdminDashboardScreen({ navigation }: AdminScreenProps<"AdminDashboard">) {
+  const { token, user } = useSelector((state: RootState) => state.auth);
   const dispatch = useDispatch();
   const signOut = async () => {
     await clearTokens();
@@ -42,15 +43,18 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
+  const { data: stats, isLoading: loading, error: rtkError } = useGetAdminStatsQuery();
+  const error = rtkError ? "Failed to load stats" : null;
+
   const greeting = useMemo(() => getGreeting(), []);
   const initials = useMemo(
     () => getInitials(user?.first_name, user?.last_name),
-    [user],
+    [user]
   );
   const displayName = useMemo(() => {
     if (!user) return "";
     const full = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim();
-    return full.length ? full : user.email;
+    return full.length ? full : "Admin User";
   }, [user]);
 
   useEffect(() => {
@@ -68,6 +72,8 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
     ]).start();
   }, [menuOpen, slideAnim, overlayAnim]);
 
+  // RTK Query handles fetching stats automatically
+
   function closeMenu() {
     setMenuOpen(false);
   }
@@ -81,7 +87,7 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
         <Pressable onPress={() => setMenuOpen(true)} hitSlop={10}>
           <Ionicons name="menu" size={26} color="#fff" />
         </Pressable>
-        <Text style={styles.brandName}>UniFlow</Text>
+        <Text style={styles.brandName}>UniFlow Admin</Text>
         <View style={styles.headerRight}>
           <View style={styles.avatarSmall}>
             <Text style={styles.avatarSmallText}>{initials}</Text>
@@ -93,31 +99,57 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
       <View style={styles.welcomeSection}>
         <Text style={styles.greeting}>{greeting},</Text>
         <Text style={styles.userName}>{displayName}</Text>
-        <Text style={styles.subtitle}>What would you like to do today?</Text>
+        <Text style={styles.subtitle}>Here's an overview of the university systems.</Text>
       </View>
+
+      {/* ── Stats ── */}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color="#7aa6e3" size="large" />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : stats ? (
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{stats.studentCount}</Text>
+            <Text style={styles.statLabel}>Students</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{stats.courseCount}</Text>
+            <Text style={styles.statLabel}>Courses</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{stats.enrollmentCount}</Text>
+            <Text style={styles.statLabel}>Enrollments</Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* ── Quick Actions ── */}
       <View style={styles.quickActions}>
         <Pressable
           style={({ pressed }) => [styles.actionCard, pressed && styles.actionCardPressed]}
-          onPress={() => navigation.navigate("CourseCatalog")}
+          onPress={() => navigation.navigate("AllStudents")}
         >
           <View style={[styles.actionIcon, { backgroundColor: "rgba(122,166,227,0.15)" }]}>
-            <Ionicons name="book-outline" size={28} color="#7aa6e3" />
+            <Ionicons name="people-outline" size={28} color="#7aa6e3" />
           </View>
-          <Text style={styles.actionTitle}>Browse Classes</Text>
-          <Text style={styles.actionDesc}>View and register for courses</Text>
+          <Text style={styles.actionTitle}>View Students</Text>
+          <Text style={styles.actionDesc}>Manage student accounts</Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [styles.actionCard, pressed && styles.actionCardPressed]}
-          onPress={() => navigation.navigate("MyCourses")}
+          onPress={() => navigation.navigate("ManageCourses")}
         >
           <View style={[styles.actionIcon, { backgroundColor: "rgba(130,220,160,0.15)" }]}>
             <Ionicons name="school-outline" size={28} color="#82dca0" />
           </View>
-          <Text style={styles.actionTitle}>My Courses</Text>
-          <Text style={styles.actionDesc}>Track your enrolled classes</Text>
+          <Text style={styles.actionTitle}>Manage Courses</Text>
+          <Text style={styles.actionDesc}>Add, edit, or delete classes</Text>
         </Pressable>
       </View>
 
@@ -143,22 +175,33 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
               style={({ pressed }) => [styles.sidebarItem, pressed && styles.sidebarItemPressed]}
               onPress={() => {
                 closeMenu();
-                navigation.navigate("CourseCatalog");
+                navigation.navigate("AdminDashboard");
               }}
             >
-              <Ionicons name="book-outline" size={22} color="#d9d9d9" />
-              <Text style={styles.sidebarItemText}>Classes</Text>
+              <Ionicons name="home-outline" size={22} color="#d9d9d9" />
+              <Text style={styles.sidebarItemText}>Dashboard</Text>
             </Pressable>
 
             <Pressable
               style={({ pressed }) => [styles.sidebarItem, pressed && styles.sidebarItemPressed]}
               onPress={() => {
                 closeMenu();
-                navigation.navigate("MyCourses");
+                navigation.navigate("AllStudents");
               }}
             >
-              <Ionicons name="school-outline" size={22} color="#d9d9d9" />
-              <Text style={styles.sidebarItemText}>My Courses</Text>
+              <Ionicons name="people-outline" size={22} color="#d9d9d9" />
+              <Text style={styles.sidebarItemText}>Students</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.sidebarItem, pressed && styles.sidebarItemPressed]}
+              onPress={() => {
+                closeMenu();
+                navigation.navigate("ManageCourses");
+              }}
+            >
+              <Ionicons name="book-outline" size={22} color="#d9d9d9" />
+              <Text style={styles.sidebarItemText}>Courses</Text>
             </Pressable>
 
             <View style={{ flex: 1 }} />
@@ -184,10 +227,9 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#1a1a2e",
-  },
+  container: { flex: 1, backgroundColor: "#1a1a2e" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  errorText: { color: "#ff8a8a" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -204,43 +246,39 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1,
   },
-  headerRight: {
-    width: 36,
-    alignItems: "flex-end",
-  },
+  headerRight: { width: 36, alignItems: "flex-end" },
   avatarSmall: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#7aa6e3",
+    backgroundColor: "#e37a7a", // Reddish for admin
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarSmallText: {
-    color: "#0b1b2e",
-    fontWeight: "800",
-    fontSize: 12,
+  avatarSmallText: { color: "#2e0b0b", fontWeight: "800", fontSize: 12 },
+  welcomeSection: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10 },
+  greeting: { color: "#a0a0b8", fontSize: 15 },
+  userName: { color: "#fff", fontSize: 26, fontWeight: "800", marginTop: 2 },
+  subtitle: { color: "#7a7a90", fontSize: 13, marginTop: 8 },
+  
+  statsContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 18,
+    gap: 12,
+    marginTop: 10,
   },
-  welcomeSection: {
-    paddingHorizontal: 22,
-    paddingTop: 28,
-    paddingBottom: 10,
+  statCard: {
+    flex: 1,
+    backgroundColor: "#20203a",
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#2e2e4a",
   },
-  greeting: {
-    color: "#a0a0b8",
-    fontSize: 15,
-  },
-  userName: {
-    color: "#fff",
-    fontSize: 26,
-    fontWeight: "800",
-    marginTop: 2,
-  },
-  subtitle: {
-    color: "#7a7a90",
-    fontSize: 13,
-    marginTop: 8,
-  },
+  statValue: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 4 },
+  statLabel: { color: "#7a7a90", fontSize: 12, fontWeight: "600" },
+
   quickActions: {
     flexDirection: "row",
     paddingHorizontal: 18,
@@ -255,10 +293,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2e2e4a",
   },
-  actionCardPressed: {
-    opacity: 0.85,
-    borderColor: "#7aa6e3",
-  },
+  actionCardPressed: { opacity: 0.85, borderColor: "#e37a7a" },
   actionIcon: {
     width: 50,
     height: 50,
@@ -267,24 +302,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 14,
   },
-  actionTitle: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  actionDesc: {
-    color: "#7a7a90",
-    fontSize: 12,
-  },
-  modalRoot: {
-    flex: 1,
-    flexDirection: "row",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
+  actionTitle: { color: "#fff", fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  actionDesc: { color: "#7a7a90", fontSize: 12 },
+
+  modalRoot: { flex: 1, flexDirection: "row" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
   sidebar: {
     width: SIDEBAR_WIDTH,
     backgroundColor: "#16213e",
@@ -301,38 +323,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
   },
-  sidebarHeader: {
-    marginBottom: 10,
-  },
+  sidebarHeader: { marginBottom: 10 },
   sidebarAvatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#7aa6e3",
+    backgroundColor: "#e37a7a",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
   },
-  sidebarAvatarText: {
-    color: "#0b1b2e",
-    fontWeight: "800",
-    fontSize: 20,
-  },
-  sidebarName: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  sidebarEmail: {
-    color: "#7a7a90",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  sidebarDivider: {
-    height: 1,
-    backgroundColor: "#2e2e4a",
-    marginVertical: 16,
-  },
+  sidebarAvatarText: { color: "#2e0b0b", fontWeight: "800", fontSize: 20 },
+  sidebarName: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  sidebarEmail: { color: "#7a7a90", fontSize: 13, marginTop: 3 },
+  sidebarDivider: { height: 1, backgroundColor: "#2e2e4a", marginVertical: 16 },
   sidebarItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -341,12 +345,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 10,
   },
-  sidebarItemPressed: {
-    backgroundColor: "rgba(122,166,227,0.1)",
-  },
-  sidebarItemText: {
-    color: "#d9d9d9",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  sidebarItemPressed: { backgroundColor: "rgba(227,122,122,0.1)" },
+  sidebarItemText: { color: "#d9d9d9", fontSize: 16, fontWeight: "600" },
 });

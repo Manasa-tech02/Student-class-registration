@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, StyleSheet, Text, View } from "react-native";
+import type { AuthScreenProps } from "../navigation/types";
+import { useDispatch } from "react-redux";
+import { setCredentials, logout } from "../features/auth/authSlice";
+import { useSignupMutation, useLazyGetMeQuery } from "../features/auth/authApi";
+import { saveTokens, clearTokens } from "../authTokenStorage";
 import { LabeledInput } from "../components/LabeledInput";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { signup } from "../api";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function SignupScreen(props: {
-  onSignedUp: (token: string, refreshToken: string) => void;
-  onGoToLogin: () => void;
-}) {
+export function SignupScreen({ navigation }: AuthScreenProps<"Signup">) {
+  const dispatch = useDispatch();
+  const [signupApi] = useSignupMutation();
+  const [triggerGetMe] = useLazyGetMeQuery();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -179,16 +183,21 @@ export function SignupScreen(props: {
             if (!result.isValid) return;
             setSubmitting(true);
             try {
-              const response = await signup({
+              const response = await signupApi({
                 first_name: result.trimmedFirstName,
                 last_name: result.trimmedLastName,
                 email: result.trimmedEmail,
                 student_id: result.trimmedStudentId,
                 password,
-              });
-              props.onSignedUp(response.token, response.refreshToken);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
+              }).unwrap();
+              
+              await saveTokens(response.token, response.refreshToken);
+              const userRes = await triggerGetMe().unwrap();
+              dispatch(setCredentials({ user: userRes.user, token: response.token }));
+            } catch (e: any) {
+              await clearTokens();
+              dispatch(logout());
+              setError(e?.data?.error || e?.message || "Failed to sign up");
             } finally {
               setSubmitting(false);
             }
@@ -197,7 +206,7 @@ export function SignupScreen(props: {
 
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Already have an account?</Text>
-          <Text style={styles.link} onPress={props.onGoToLogin}>
+          <Text style={styles.link} onPress={() => navigation.navigate("Login")}>
             {" "}
             Log in
           </Text>
@@ -210,7 +219,7 @@ export function SignupScreen(props: {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#232323",
+    backgroundColor: "#1a1a2e",
     paddingHorizontal: 18,
     paddingTop: 60,
     alignItems: "center",
@@ -218,11 +227,11 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#2e2e2e",
+    backgroundColor: "#20203a",
     borderRadius: 18,
     padding: 22,
     borderWidth: 1,
-    borderColor: "#3a3a3a",
+    borderColor: "#2e2e4a",
   },
   title: {
     color: "#fff",
@@ -263,4 +272,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

@@ -1,0 +1,66 @@
+# Backend Flow and Architecture Overview
+This document explains the overarching concepts (Security, Scalability, Availability, Responsiveness) and provides a file-by-file breakdown of exactly how data flows through the backend.
+
+---
+
+## 🛡️ Core Concepts We Built In
+
+### 1. Security 
+- **Helmet (`helmet`)**: Added in `app.ts`, this automatically adds protective HTTP headers to stop common web vulnerabilities (like cross-site scripting or clickjacking).
+- **CORS (`cors`)**: Ensures only your specific frontend domains are allowed to talk to the API. It blocks unauthorized websites from secretly making requests to your backend on behalf of users.
+- **Rate Limiting (`express-rate-limit`)**: Placed on the `/auth` routes, this limits a single IP address to 100 requests per 15 minutes. It completely prevents hackers from using bots to brute-force guess passwords.
+- **Zod Validation**: Before any data touches your database, Zod checks if it’s the correct shape (e.g., "Is this a real email format?", "Is the password between 6 and 200 characters?"). It blocks malformed, dangerous data immediately.
+- **Bcrypt Hashing**: Passwords are never saved as plain text. They are hashed using `bcrypt` so even the database administrator cannot read them.
+- **JWT Authentication**: We use stateless JSON Web Tokens that cryptographically prove a user's identity on every request without needing a slow session database lookup.
+
+### 2. Scalability & Availability
+- **Stateless Architecture**: Because you use JWT tokens for authentication, the Node.js server itself stores zero session state in its memory. This means if you get popular, you can boot up 10 exact copies of this backend on AWS, put a Load Balancer in front of them, and handle 10x the traffic instantly.
+- **Connection Pooling**: Handled inherently by Prisma, meaning 1,000 students hitting the server at once won't crash your PostgreSQL database; connections are queued perfectly.
+- **Separation of Concerns**: By splitting your code into Routes, Controllers, and Services, pieces of the logic can be modified, tested, or scaled independently without breaking the whole application.
+
+### 3. Responsiveness (Speed)
+- **Asynchronous Flow**: Everything uses `async/await`. While the backend is waiting 0.05 seconds for PostgreSQL to fetch students, Node.js doesn't freeze. It immediately handles incoming requests for other users, making the API feel incredibly responsive under load.
+- **Targeted DB Selection**: In Prisma queries (e.g., `select: { id: true, first_name: true }`), we explicitly define only the exact fields we need. We don't drag 50 unused columns of data across the network just to throw them away, which drastically cuts down response time.
+
+---
+
+## 🗂️ Overview: The File Structure & Flow
+Here is the exact journey a request takes, and the purpose of every file it touches.
+
+### 1. The Entry Point
+* **`src/index.ts`**
+  * **Purpose:** The ignition switch. It imports your app, defines the physical Port (e.g., `3000`), and starts listening to the internet. 
+
+### 2. The Application Setup
+* **`src/app.ts`**
+  * **Purpose:** The Grand Central Station. Every incoming request lands here first.
+  * **Flow:** It applies your global security (Helmet, rate limits, CORS). It parses incoming JSON data. Then, it looks at the URL (e.g., `/auth/login`) and hands the request off to the correct router. Lastly, it contains your global error handler to catch crashes and return safe `500 Server Error` JSON instead of HTML stack traces.
+
+### 3. The Routers (Traffic Cops)
+* **`src/routes/auth.ts`, `courses.ts`, `admin.ts`, `health.ts`**
+  * **Purpose:** They define exactly which URLs and HTTP Methods (GET, POST, DELETE) are allowed.
+  * **Flow:** They attach middleware guards. For example, in `courses.ts`, it says: *"Before you go any further, pass through `requireAuth.ts` to prove you have a valid JWT token."* If they pass, they are pointed to a specific Controller function.
+
+### 4. The Middleware (Bouncers)
+* **`src/middleware/requireAuth.ts` & `requireAdmin.ts`**
+  * **Purpose:** Gatekeepers that inspect the request before the actual logic runs. 
+  * **Flow:** They extract the JWT token from the Authorization header, decrypt it, verify it hasn't expired, and check if the user has the correct role (`"student"` or `"admin"`). If anything fails, they reject the request instantly with a 401 or 403 error.
+
+### 5. The Controllers (Validators)
+* **`src/controllers/authController.ts`, `courseController.ts`, `adminController.ts`**
+  * **Purpose:** Translators between the HTTP network and your business logic. 
+  * **Flow:** They extract the raw text from `req.body` or `req.params`. They use Zod schemas to ensure the input is valid. Then they call the Service layer. Finally, they take the Service's data and wrap it into an HTTP Response with the correct JSON and Status Code (`200 OK`, `201 Created`).
+
+### 6. The Services (The Brains)
+* **`src/services/authService.ts`, `courseService.ts`, `adminService.ts`, `enrollmentService.ts`**
+  * **Purpose:** The core business rules of your university app. They know nothing about HTTP requests. 
+  * **Flow:** They receive pure, validated data from the Controller. They execute the heavy lifting (like hashing a password with `bcrypt`, or summing up statistics). Most importantly, they use Prisma to command the database.
+
+### 7. Core Libraries
+* **`src/lib/prisma.ts`**: Initializes the connection to PostgreSQL so you only have to connect once.
+* **`src/lib/jwt.ts`**: Contains the secret cryptography logic for signing and reading your Access and Refresh tokens.
+* **`src/lib/httpError.ts`**: A custom Error class that lets your Services easily throw specific errors (like `throw new HttpError(404, "Course not found")`) which `app.ts` understands.
+
+### 8. The Database Layer
+* **`prisma/schema.prisma`**: The architect's blueprint for the PostgreSQL database (the exact structure of your Students, Courses, and Enrollments tables).
+* **`prisma/seed.ts`**: A script you run once to automatically populate the database with the core Admin account so you have a way to log into the empty app for the first time.

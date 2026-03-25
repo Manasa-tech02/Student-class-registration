@@ -1,0 +1,258 @@
+====================================================================
+  FRONTEND — COMPLETED FEATURES & TECH STACK
+  Student Course Registration System (UniFlow)
+====================================================================
+
+--------------------------------------------------------------------
+TECH STACK
+--------------------------------------------------------------------
+
+Technology              Version     Why We Used It
+----------------------  ----------  ----------------------------------------
+React Native            v0.83       Cross-platform mobile framework. Single
+                                    codebase runs on both Android and iOS.
+                                    Native performance, not a webview.
+
+Expo (SDK 55)           v55.0       Managed workflow for React Native. Handles
+                                    build tooling, native modules, OTA updates.
+                                    Expo Go enables instant testing on phone
+                                    without building a full APK.
+
+TypeScript              v5.9        Type safety across the entire frontend.
+                                    Catches prop mismatches, API response shape
+                                    errors, and null checks at compile time.
+
+React                   v19.2       UI library powering React Native. Hooks
+                                    (useState, useEffect, useMemo, useCallback,
+                                    useRef) manage all component state and side
+                                    effects.
+
+expo-secure-store       v55.0       Encrypted storage for JWT tokens on device.
+                                    Uses iOS Keychain and Android Keystore.
+                                    Tokens are never stored in plain text or
+                                    AsyncStorage (which is unencrypted).
+
+@expo/vector-icons      v15.0       Ionicons icon set for UI elements (menu
+                                    hamburger, back arrows, book icons, star
+                                    ratings, etc.). Ships with Expo, zero config.
+
+expo-status-bar         v55.0       Controls the device status bar appearance.
+                                    Set to "light" for white text on the dark
+                                    navy background.
+
+expo-linear-gradient    v55.0       Available for gradient UI effects if needed
+                                    in future iterations.
+
+react-native-web        v0.21       Enables running the app in a web browser
+                                    for testing and development purposes.
+
+--------------------------------------------------------------------
+APP STRUCTURE
+--------------------------------------------------------------------
+
+frontend/
+├── App.tsx                         Main entry — screen router + auth state
+├── app.json                        Expo config (app name: "UniFlow")
+├── index.ts                        Expo entry point
+├── src/
+│   ├── api.ts                      All API calls + auto-refresh logic
+│   ├── authTokenStorage.ts         Secure token persistence (SecureStore)
+│   ├── screens/
+│   │   ├── LoginScreen.tsx         Email + password login form
+│   │   ├── SignupScreen.tsx        6-field registration form
+│   │   ├── DashboardScreen.tsx     Home screen with sidebar + quick actions
+│   │   ├── CourseCatalogScreen.tsx Course list with search + filter
+│   │   └── CourseDetailScreen.tsx  Full course info + register button
+│   └── components/
+│       ├── LabeledInput.tsx        Reusable form input with label + error
+│       └── PrimaryButton.tsx       Reusable styled button
+
+--------------------------------------------------------------------
+COMPLETED FEATURES
+--------------------------------------------------------------------
+
+1. AUTHENTICATION SCREENS
+
+   Login Screen
+   - Email + password inputs with real-time validation
+   - Email format check (regex), password required check
+   - Show/hide password toggle
+   - Error display (wrong password, no account, server errors)
+   - On success → saves both tokens → loads profile → navigates to dashboard
+   - "New here? Create an account" link to signup
+   - Outcome: Student logs in and lands on dashboard with their name
+
+   Signup Screen
+   - 6 fields: first name, last name, email, student ID, password, confirm password
+   - Real-time validation (email format, password length >= 6, passwords match)
+   - Show/hide toggle on both password fields
+   - Error display (duplicate email/student_id, validation errors)
+   - On success → saves both tokens → loads profile → navigates to dashboard
+   - "Already have an account? Log in" link to login
+   - Outcome: New student account created, immediately logged in
+
+2. DASHBOARD SCREEN
+
+   Header Bar
+   - Left: hamburger menu icon (tappable, opens sidebar)
+   - Center: "UniFlow" brand name in accent blue
+   - Right: user avatar with initials (e.g. "JD" for John Doe)
+
+   Welcome Section
+   - Time-based greeting (Good Morning / Good Afternoon / Good Evening)
+   - User's full name in large bold text
+   - "What would you like to do today?" subtitle
+
+   Quick Action Cards (2 side-by-side)
+   - "Browse Classes" card with book icon → navigates to course catalog
+   - "My Courses" card with school icon → navigates to course catalog
+   - Press feedback with border highlight
+
+   Slide-in Sidebar Modal
+   - Animated slide from left (260ms) with dark overlay
+   - User avatar (large) + full name + email at top
+   - "Classes" button with book icon → navigates to course catalog
+   - "Logout" button with red icon → clears tokens, back to login
+   - Tap outside or Android back button to close
+   - Outcome: Navigation hub for the authenticated user
+
+3. COURSE CATALOG SCREEN
+
+   Header
+   - Back arrow → returns to dashboard
+   - "All Courses" centered title
+
+   Search Bar
+   - Filters courses by class name or professor name in real-time
+   - Clear button (X icon) when search has text
+   - Placeholder: "Search by name or professor..."
+
+   Course Cards (FlatList)
+   - Book icon badge + course name + chevron arrow
+   - Professor name with person icon
+   - Duration with clock icon
+   - Star rating (filled/half/empty stars) with numeric value
+   - Capacity badge showing seat count
+   - Press feedback with blue border highlight
+   - Tap → navigates to course detail screen
+
+   Empty/Error States
+   - Loading spinner while fetching
+   - Error message with alert icon on API failure
+   - "No courses match your search" when filter returns empty
+   - "No courses available" when database is empty
+   - Outcome: Student browses and searches all available courses
+
+4. COURSE DETAIL SCREEN
+
+   Header
+   - Back arrow → returns to course catalog
+   - "Course Details" centered title
+
+   Hero Section
+   - Large book icon in rounded badge
+   - Course name in large bold text
+   - Star rating row with numeric value
+
+   Info Grid (3 cards side-by-side)
+   - Professor (with person icon, blue)
+   - Duration (with clock icon, green)
+   - Capacity (with people icon, yellow)
+
+   Description Section
+   - "About this course" section title
+   - Full course description text
+
+   Register Button
+   - Blue "Register for this Course" button (full width, 56px height)
+   - Loading spinner while enrolling
+   - Turns green with checkmark + "Enrolled" text on success
+   - Handles "already enrolled" gracefully (shows enrolled state)
+   - Error box with alert icon if enrollment fails
+   - Outcome: Student registers for a course with one tap
+
+5. TOKEN MANAGEMENT
+
+   Secure Storage (expo-secure-store)
+   - saveTokens(accessToken, refreshToken) → stores both in encrypted storage
+   - getAccessToken() → retrieves access token
+   - getRefreshToken() → retrieves refresh token
+   - clearTokens() → deletes both on logout
+
+   Auto Session Restore (App.tsx on startup)
+   - Checks SecureStore for saved tokens
+   - Tries GET /auth/me with access token
+   - If 401 → tries POST /auth/refresh with refresh token
+   - If refresh works → saves new tokens → goes to dashboard
+   - If both fail → clears tokens → shows login screen
+   - Outcome: User reopens app and lands on dashboard without re-login
+     (as long as refresh token is valid — up to 7 days)
+
+   Auto Token Refresh (api.ts withAutoRefresh)
+   - Wraps any API call
+   - If call returns 401 → automatically tries refresh
+   - If refresh succeeds → retries original call with new token
+   - If refresh fails → triggers session expired → back to login
+   - Outcome: User never sees "session expired" during normal use
+
+   Session Expired Callback
+   - setOnSessionExpired() registers a global callback
+   - Called when refresh token is also expired
+   - Clears all state and navigates to login
+   - Outcome: Clean logout when tokens are truly expired
+
+6. API LAYER (api.ts)
+
+   Auth Functions
+   - signup(input) → POST /auth/signup → returns { token, refreshToken }
+   - login(input) → POST /auth/login → returns { token, refreshToken }
+   - refreshTokens(refreshToken) → POST /auth/refresh → returns new pair
+   - getMe(token) → GET /auth/me → returns { user }
+
+   Course Functions
+   - getCourses(token) → GET /courses → returns { courses }
+
+   Enrollment Functions
+   - enrollInCourse(token, courseId) → POST /enroll → returns { message }
+   - dropCourse(token, courseId) → DELETE /enroll → returns { message }
+   - getMyCourses(token) → GET /enroll/my-courses → returns { courses }
+
+   Error Handling
+   - Parses API error responses into user-friendly messages
+   - Extracts Zod field validation errors (e.g. "email: Invalid email")
+   - Maps HTTP status codes to readable messages
+   - Outcome: User always sees a clear, helpful error message
+
+7. NAVIGATION
+
+   State-based routing in App.tsx (no external library)
+   - 5 screen states: login | signup | dashboard | courses | courseDetail
+   - Conditional rendering based on current screen state
+   - Props-based navigation callbacks between screens
+   - Auth guard: dashboard/courses/courseDetail require token + user
+   - Outcome: Lightweight navigation without react-navigation dependency
+
+8. UI DESIGN
+
+   Color Palette (Navy Dark Theme)
+   - Background: #1a1a2e (deep navy)
+   - Cards/surfaces: #20203a (slightly lighter navy)
+   - Header: #16213e (dark navy bar)
+   - Borders: #2e2e4a (subtle dividers)
+   - Accent blue: #7aa6e3 (buttons, brand, links)
+   - Accent green: #82dca0 (success, capacity)
+   - Accent yellow: #f5c842 (star ratings)
+   - Error red: #ff8a8a (errors, logout)
+   - Text primary: #fff
+   - Text secondary: #a0a0b8, #7a7a90
+   - Input backgrounds: #1a1a2e with #2e2e4a borders
+
+   Responsive Design
+   - maxWidth: 420 on auth cards (looks good on phones + tablets)
+   - Flex layouts throughout (adapts to screen size)
+   - FlatList for scrollable course lists
+
+--------------------------------------------------------------------
+TOTAL: 5 screens, 2 reusable components, 9 API functions,
+       secure token storage, auto session restore, dark navy theme
+====================================================================

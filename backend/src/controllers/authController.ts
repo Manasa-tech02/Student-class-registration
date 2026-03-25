@@ -3,17 +3,23 @@ import { z } from "zod";
 import { HttpError } from "../lib/httpError";
 import * as authService from "../services/authService";
 
+const emailSchema = z.string().refine(
+  (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+  { message: "Invalid email address" }
+);
+
 const signupSchema = z.object({
   first_name: z.string().min(1).max(100),
   last_name: z.string().min(1).max(100),
-  email: z.string().email(),
+  email: emailSchema,
   student_id: z.string().min(1).max(50),
   password: z.string().min(6).max(200),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(1).max(200),
+  role: z.enum(["admin", "student"]).optional(),
 });
 
 export async function signup(req: Request, res: Response, next: NextFunction) {
@@ -29,7 +35,7 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const input = loginSchema.parse(req.body);
-    const tokens = await authService.loginUser(input.email, input.password);
+    const tokens = await authService.loginUser(input.email, input.password, input.role);
     return res.json(tokens);
   } catch (err) {
     return next(err);
@@ -59,6 +65,9 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
     return res.json(tokens);
   } catch (err) {
     if (err instanceof HttpError) return next(err);
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[refresh] token verification failed:", err instanceof Error ? err.message : err);
+    }
     return next(new HttpError(401, "Invalid or expired refresh token"));
   }
 }

@@ -1,0 +1,230 @@
+====================================================================
+  BACKEND — COMPLETED FEATURES & TECH STACK
+  Student Course Registration System (UniFlow)
+====================================================================
+
+--------------------------------------------------------------------
+TECH STACK
+--------------------------------------------------------------------
+
+Technology              Version     Why We Used It
+----------------------  ----------  ----------------------------------------
+Node.js                 Latest LTS  Industry-standard JS runtime for servers.
+                                    Non-blocking I/O handles many concurrent
+                                    student requests efficiently.
+
+Express.js              v5.2        Minimal, flexible web framework. De facto
+                                    standard for Node.js APIs. v5 has native
+                                    async error handling support.
+
+TypeScript              v5.9        Catches bugs at compile time instead of
+                                    runtime. Provides autocomplete, type safety
+                                    for all API inputs/outputs, and better
+                                    developer experience.
+
+PostgreSQL (Neon)       --          Production-grade relational database. Neon
+                                    provides serverless Postgres with auto-scaling
+                                    and zero cold-start pooling. Perfect for a
+                                    student system with relational data (users,
+                                    courses, enrollments).
+
+Prisma ORM              v7.5        Type-safe database queries in TypeScript.
+                                    Auto-generates types from schema. Handles
+                                    migrations, relations, and connection pooling.
+                                    No raw SQL needed.
+
+JWT (jsonwebtoken)      v9.0        Stateless authentication. The server doesn't
+                                    need to store sessions — the token itself
+                                    carries user identity. Scales horizontally
+                                    without shared session storage.
+
+bcrypt                  v6.0        Industry-standard password hashing. Uses
+                                    salt rounds to make brute-force attacks
+                                    computationally expensive. Passwords are
+                                    never stored in plain text.
+
+Zod                     v4.3        Runtime input validation with TypeScript
+                                    integration. Validates every API request body
+                                    and returns structured error messages.
+
+dotenv                  v17.3       Loads secrets (DB_URL, JWT_SECRET) from .env
+                                    file. Keeps credentials out of source code
+                                    and version control.
+
+Helmet                  v8.1        Sets security HTTP headers automatically
+                                    (X-Content-Type-Options, Strict-Transport-
+                                    Security, etc.) to prevent common attacks.
+
+express-rate-limit      v8.3        Prevents brute-force login attempts by
+                                    limiting requests per IP (100 per 15 min
+                                    on auth routes).
+
+Morgan                  v1.10       HTTP request logger. Logs every API call
+                                    (method, URL, status, response time) to
+                                    console for debugging and monitoring.
+
+CORS                    v2.8        Allows the React Native app (different
+                                    origin) to communicate with the backend.
+                                    Configured with credentials support.
+
+tsx                     v4.21       Runs TypeScript directly without a separate
+                                    build step. Includes hot-reload via watch
+                                    mode for fast development.
+
+--------------------------------------------------------------------
+ARCHITECTURE (Controller → Service Pattern)
+--------------------------------------------------------------------
+
+Layer           Folder              Responsibility
+--------------  ------------------  ------------------------------------
+Routes          src/routes/         URL mapping only. Maps HTTP method +
+                                    path to controller function.
+
+Controllers     src/controllers/    Handles HTTP request/response. Validates
+                                    input with Zod, calls service, sends
+                                    JSON response with proper status code.
+
+Services        src/services/       Business logic and database operations.
+                                    No knowledge of HTTP — receives data,
+                                    returns data or throws errors.
+
+Middleware      src/middleware/      Runs before controllers. Auth checks,
+                                    rate limiting, etc.
+
+Lib             src/lib/            Shared utilities — Prisma client, JWT
+                                    signing/verification, custom error class.
+
+Types           src/types/          TypeScript type extensions (e.g. adding
+                                    user property to Express Request).
+
+--------------------------------------------------------------------
+COMPLETED FEATURES
+--------------------------------------------------------------------
+
+1. AUTHENTICATION (5 endpoints)
+
+   POST /auth/signup
+   - Input: first_name, last_name, email, student_id, password
+   - Validates all fields with Zod
+   - Hashes password with bcrypt (10 salt rounds)
+   - Prevents duplicate email & student_id (Prisma P2002 error)
+   - Returns: { token, refreshToken }
+   - Outcome: New student account created in DB, JWT tokens issued
+
+   POST /auth/login
+   - Input: email, password
+   - Finds user by email, compares bcrypt hash
+   - Returns: { token, refreshToken }
+   - Outcome: Existing student verified, fresh tokens issued
+
+   GET /auth/me (Protected)
+   - Requires: Bearer token in Authorization header
+   - Returns: { user: { id, first_name, last_name, email, student_id, role, created_at } }
+   - Outcome: Frontend gets user profile to display on dashboard
+
+   POST /auth/refresh
+   - Input: { refreshToken }
+   - Verifies refresh token, checks user still exists in DB
+   - Returns: { token, refreshToken } (new pair)
+   - Outcome: User stays logged in without re-entering password.
+     Access token lasts 15 min, refresh token 7 days.
+
+   POST /auth/logout (Protected)
+   - Returns: 204 No Content
+   - Outcome: Server confirms logout. Client must delete stored tokens.
+
+2. COURSES (1 endpoint)
+
+   GET /courses (Protected)
+   - Returns all courses ordered by newest first
+   - Returns: { courses: [{ id, class_name, professor, duration, rating, description, capacity, created_at }] }
+   - Outcome: Student sees full course catalog
+
+3. ENROLLMENT (3 endpoints)
+
+   POST /enroll (Protected)
+   - Input: { course_id }
+   - Checks course exists (404 if not)
+   - Prevents duplicate enrollment (409 if already enrolled)
+   - Returns: { message, enrollment: { id, course_id, created_at } }
+   - Outcome: Student enrolled in the course
+
+   DELETE /enroll (Protected)
+   - Input: { course_id }
+   - Finds enrollment by student_id + course_id
+   - Returns: { message: "Course dropped successfully" }
+   - Outcome: Student removed from the course
+
+   GET /enroll/my-courses (Protected)
+   - Returns all courses the logged-in student is enrolled in
+   - Includes full course details via Prisma relation join
+   - Returns: { courses: [{ enrollment_id, enrolled_at, id, class_name, professor, ... }] }
+   - Outcome: Student sees their personal enrolled courses list
+
+4. HEALTH CHECK (1 endpoint)
+
+   GET /health
+   - Returns: { status: "ok" }
+   - Outcome: Uptime monitoring — confirms server is running
+
+5. SECURITY
+
+   - JWT middleware (requireAuth) protects all routes except signup, login, refresh, health
+   - Dual-token system: access token (15 min) + refresh token (7 days)
+   - Separate JWT secrets for access and refresh tokens
+   - bcrypt password hashing (never stored in plain text)
+   - Helmet security headers on every response
+   - Rate limiting on /auth routes (100 requests per 15 min per IP)
+   - Zod validation on all request bodies
+   - Sensitive data never exposed (password excluded from all selects)
+   - CORS configured with credentials support
+   - Production error masking (real error details hidden from users)
+   - Dev-only debug logging for token verification failures
+
+6. ERROR HANDLING
+
+   - Centralized global error handler in app.ts
+   - HttpError class for clean status code + message propagation
+   - Zod errors auto-formatted as 400 with field-level details
+   - Prisma unique constraint errors caught and returned as 409
+   - 404 handler for unknown routes
+   - All async route handlers wrapped in try/catch
+
+7. DATABASE
+
+   Three tables (PostgreSQL on Neon):
+
+   students (User model)
+   - id (PK, cuid), first_name, last_name, email (unique),
+     student_id (unique), password (hashed), role, created_at
+
+   courses (Course model)
+   - id (PK, cuid), class_name, professor, duration, rating,
+     description, capacity, created_at
+
+   enrollments (Enrollment model)
+   - id (PK, cuid), student_id (FK → students), course_id (FK → courses),
+     created_at, UNIQUE(student_id, course_id)
+
+   Seeded with 8 Computer Science courses via migration SQL.
+
+8. LOGGING
+
+   - Morgan request logger (dev format in development, combined in production)
+   - Startup log: "Backend listening on http://0.0.0.0:3000"
+
+--------------------------------------------------------------------
+ENVIRONMENT VARIABLES (.env)
+--------------------------------------------------------------------
+
+Variable                Purpose
+----------------------  ----------------------------------------
+DB_URL                  PostgreSQL connection string (Neon)
+JWT_SECRET              128-char hex key for signing access tokens
+JWT_REFRESH_SECRET      Separate key for signing refresh tokens
+JWT_EXPIRES_IN          Access token TTL in seconds (900 = 15 min)
+JWT_REFRESH_EXPIRES_IN  Refresh token TTL in seconds (604800 = 7 days)
+
+--------------------------------------------------------------------
+TOTAL: 10 API endpoints, 3 database tables, production-ready security
+====================================================================

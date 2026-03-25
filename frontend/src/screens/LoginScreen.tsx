@@ -1,17 +1,24 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from "react-native";
+import type { AuthScreenProps } from "../navigation/types";
+import { useDispatch } from "react-redux";
+import { setCredentials, logout } from "../features/auth/authSlice";
+import { useLoginMutation, useLazyGetMeQuery } from "../features/auth/authApi";
+import { saveTokens, clearTokens } from "../authTokenStorage";
 import { LabeledInput } from "../components/LabeledInput";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { login } from "../api";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function LoginScreen(props: {
-  onSignedIn: (token: string, refreshToken: string) => void;
-  onGoToSignup: () => void;
-}) {
+type Role = "student" | "admin";
+
+export function LoginScreen({ navigation }: AuthScreenProps<"Login">) {
+  const dispatch = useDispatch();
+  const [loginApi] = useLoginMutation();
+  const [triggerGetMe] = useLazyGetMeQuery();
+  const [role, setRole] = useState<Role>("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,6 +43,24 @@ export function LoginScreen(props: {
         <Text style={styles.title}>ClassReg</Text>
         <Text style={styles.subtitle}>Sign in with your university account</Text>
 
+        {/* ── Student / Admin Toggle ── */}
+        <View style={styles.toggle}>
+          {(["student", "admin"] as Role[]).map((r) => (
+            <Pressable
+              key={r}
+              style={[styles.toggleTab, role === r && styles.toggleTabActive]}
+              onPress={() => {
+                setRole(r);
+                setError(null);
+              }}
+            >
+              <Text style={[styles.toggleLabel, role === r && styles.toggleLabelActive]}>
+                {r === "student" ? "Student" : "Admin"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         <LabeledInput
           label="Email"
           value={email}
@@ -52,7 +77,7 @@ export function LoginScreen(props: {
                     : "Enter a valid email address",
             }));
           }}
-          placeholder="e.g. stu20240185@university.edu"
+          placeholder={role === "admin" ? "admin@university.edu" : "e.g. stu20240185@university.edu"}
           keyboardType="email-address"
           autoCapitalize="none"
           errorText={fieldErrors.email}
@@ -82,23 +107,31 @@ export function LoginScreen(props: {
             if (!validateLoginForm()) return;
             setSubmitting(true);
             try {
-              const result = await login({ email: email.trim(), password });
-              props.onSignedIn(result.token, result.refreshToken);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
+              const result = await loginApi({ email: email.trim(), password, role }).unwrap();
+              await saveTokens(result.token, result.refreshToken);
+
+              const userRes = await triggerGetMe().unwrap();
+              dispatch(setCredentials({ user: userRes.user, token: result.token }));
+            } catch (e: any) {
+              await clearTokens();
+              dispatch(logout());
+              setError(e?.data?.error || e?.message || "Failed to sign in");
             } finally {
               setSubmitting(false);
             }
           }}
         />
 
-        <View style={styles.footerRow}>
-          <Text style={styles.footerText}>New here?</Text>
-          <Text style={styles.link} onPress={props.onGoToSignup}>
-            {" "}
-            Create an account
-          </Text>
-        </View>
+        {/* Hide signup link for admin — admins can't self-register */}
+        {role === "student" && (
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>New here?</Text>
+            <Text style={styles.link} onPress={() => navigation.navigate("Signup")}>
+              {" "}
+              Create an account
+            </Text>
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -107,7 +140,7 @@ export function LoginScreen(props: {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#232323",
+    backgroundColor: "#1a1a2e",
     paddingHorizontal: 18,
     paddingTop: 60,
     alignItems: "center",
@@ -115,11 +148,11 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#2e2e2e",
+    backgroundColor: "#20203a",
     borderRadius: 18,
     padding: 22,
     borderWidth: 1,
-    borderColor: "#3a3a3a",
+    borderColor: "#2e2e4a",
   },
   title: {
     color: "#fff",
@@ -131,9 +164,35 @@ const styles = StyleSheet.create({
   subtitle: {
     color: "#cfcfcf",
     textAlign: "center",
-    marginBottom: 22,
+    marginBottom: 18,
     fontSize: 13,
   },
+  // ── Toggle ──
+  toggle: {
+    flexDirection: "row",
+    backgroundColor: "#12122a",
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 20,
+  },
+  toggleTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  toggleTabActive: {
+    backgroundColor: "#7aa6e3",
+  },
+  toggleLabel: {
+    color: "#7a7a90",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  toggleLabelActive: {
+    color: "#fff",
+  },
+  // ── Error & footer ──
   error: {
     color: "#ff8a8a",
     marginBottom: 12,
@@ -159,4 +218,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

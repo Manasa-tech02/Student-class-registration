@@ -40,7 +40,11 @@ export async function signupUser(input: {
   }
 }
 
-export async function loginUser(email: string, password: string): Promise<TokenPair> {
+export async function loginUser(
+  email: string,
+  password: string,
+  expectedRole?: "admin" | "student",
+): Promise<TokenPair> {
   const user = await prisma.user.findUnique({
     where: { email },
     select: { id: true, role: true, password: true },
@@ -53,6 +57,15 @@ export async function loginUser(email: string, password: string): Promise<TokenP
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) {
     throw new HttpError(401, "Incorrect password. Please try again");
+  }
+
+  if (expectedRole && user.role !== expectedRole) {
+    throw new HttpError(
+      403,
+      expectedRole === "admin"
+        ? "This account does not have admin access"
+        : "Please use the admin login for admin accounts",
+    );
   }
 
   return {

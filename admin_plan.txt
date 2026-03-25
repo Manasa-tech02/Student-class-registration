@@ -1,0 +1,539 @@
+Admin Access Implementation
+
+Design Decisions
+
+
+
+
+
+Admin creation: Pre-seeded in database via prisma/seed.ts. Admins cannot sign up -- they can only log in.
+
+
+
+Login screen: Shared login screen with a Student / Admin toggle. When "Admin" is selected, backend verifies the user's role is "admin". If a student tries to log in as admin, they get rejected.
+
+
+
+Signup screen: Only available for students. No changes needed. Admins are never created through signup.
+
+
+
+Routing: RootNavigator checks user.role and renders StudentStack or AdminStack accordingly.
+
+
+
+Backend Changes
+
+1. Make student_id optional -- [prisma/schema.prisma](backend/prisma/schema.prisma)
+
+Change student_id from required to optional so admin users don't need one:
+
+model User {
+  id           String       @id @default(cuid())
+  first_name   String
+  last_name    String
+  email        String       @unique
+  student_id   String?      @unique    // <- Changed: String? (optional)
+  password     String
+  role         String       @default("student")
+  created_at   DateTime     @default(now())
+  enrollments  Enrollment[]
+
+  @@map("students")
+}
+
+Run migration: npx prisma migrate dev --name make-student-id-optional
+
+This also requires updating:
+
+
+
+
+
+[src/controllers/authController.ts](backend/src/controllers/authController.ts) -- signupSchema: student_id stays required for student signup (validated at controller level, not DB level)
+
+
+
+[src/services/authService.ts](backend/src/services/authService.ts) -- signupUser: no change needed (students still provide student_id)
+
+2. Seed admin account -- [prisma/seed.ts](backend/prisma/seed.ts)
+
+Update the existing seed script to create a default admin user (no student_id):
+
+await prisma.user.upsert({
+  where: { email: "admin@university.edu" },
+  create: {
+    email: "admin@university.edu",
+    password: await bcrypt.hash("Admin@123", 10),
+    first_name: "Admin",
+    last_name: "User",
+    // no student_id -- it's optional now, admins don't need one
+    role: "admin",
+  },
+  update: {},
+});
+
+2. Update login to validate role -- [src/services/authService.ts](backend/src/services/authService.ts)
+
+Add an optional expectedRole parameter to loginUser():
+
+export async function loginUser(
+  email: string,
+  password: string,
+  expectedRole?: "admin" | "student"
+): Promise<TokenPair> {
+  const user = await prisma.user.findUnique({ where: { email }, ... });
+  // ... password check ...
+
+  if (expectedRole && user.role !== expectedRole) {
+    throw new HttpError(403,
+      expectedRole === "admin"
+        ? "This account does not have admin access"
+        : "Please use the admin login for admin accounts"
+    );
+  }
+
+  return { token: signAccessToken(user.id, user.role), ... };
+}
+
+Update [src/controllers/authController.ts](backend/src/controllers/authController.ts) to pass req.body.role to loginUser.
+
+3. Create requireAdmin middleware -- src/middleware/requireAdmin.ts (new file)
+
+export function requireAdmin(req, _res, next) {
+  if (req.user?.role !== "admin") {
+    return next(new HttpError(403, "Admin access required"));
+  }
+  return next();
+}
+
+4. Create admin routes -- src/routes/admin.ts (new file)
+
+
+
+
+
+
+
+Method
+
+
+
+Route
+
+
+
+What it does
+
+
+
+
+
+GET
+
+
+
+/admin/stats
+
+
+
+Dashboard stats (student count, course count, enrollment count)
+
+
+
+
+
+GET
+
+
+
+/admin/students
+
+
+
+List all students with enrollment count
+
+
+
+
+
+GET
+
+
+
+/admin/students/:id
+
+
+
+Single student with their enrolled courses
+
+
+
+
+
+POST
+
+
+
+/admin/courses
+
+
+
+Create a new course
+
+
+
+
+
+PUT
+
+
+
+/admin/courses/:id
+
+
+
+Update a course
+
+
+
+
+
+DELETE
+
+
+
+/admin/courses/:id
+
+
+
+Delete a course (and its enrollments)
+
+
+
+
+
+GET
+
+
+
+/admin/courses/:id/enrollments
+
+
+
+List students enrolled in a course
+
+
+
+
+
+DELETE
+
+
+
+/admin/enrollments/:id
+
+
+
+Remove a student from a course
+
+All routes use requireAuth + requireAdmin middleware.
+
+5. Create admin controller -- src/controllers/adminController.ts (new file)
+
+Handles request validation and delegates to service layer.
+
+6. Create admin service -- src/services/adminService.ts (new file)
+
+Contains business logic:
+
+
+
+
+
+getDashboardStats() -- counts from Prisma
+
+
+
+getAllStudents(search?, page?, limit?) -- with pagination and search
+
+
+
+getStudentDetail(studentId) -- student info + their enrollments
+
+
+
+createCourse(input) -- validate + insert
+
+
+
+updateCourse(courseId, input) -- validate + update
+
+
+
+deleteCourse(courseId) -- delete enrollments first, then course
+
+
+
+getCourseEnrollments(courseId) -- list enrolled students
+
+
+
+removeEnrollment(enrollmentId) -- delete enrollment record
+
+7. Register admin routes -- [src/app.ts](backend/src/app.ts)
+
+Add app.use("/admin", adminRouter) alongside existing routes.
+
+
+
+Frontend Changes
+
+8. Update Login Screen -- [src/screens/LoginScreen.tsx](frontend/src/screens/LoginScreen.tsx)
+
+Add a Student / Admin toggle at the top of the login form:
+
+┌─────────────────────────────────┐
+│         ClassReg                 │
+│                                  │
+│  ┌──────────┬──────────┐        │
+│  │ Student  │  Admin   │  ← Toggle
+│  └──────────┴──────────┘        │
+│                                  │
+│  Email: [________________]      │
+│  Password: [_____________]      │
+│                                  │
+│  [Sign in]                       │
+│                                  │
+│  New here? Create an account    │  ← Hidden when Admin is selected
+│                                  │
+└─────────────────────────────────┘
+
+
+
+
+
+When "Admin" selected: hide "Create an account" link (admins can't sign up)
+
+
+
+Login sends role: "admin" or role: "student" in the request body
+
+
+
+Backend validates the role matches
+
+9. Update RootNavigator -- [src/navigation/RootNavigator.tsx](frontend/src/navigation/RootNavigator.tsx)
+
+if (!token) return <AuthStack />;
+if (user?.role === "admin") return <AdminStack />;
+return <StudentStack />;
+
+10. Create AdminStack -- src/navigation/AdminStack.tsx (new file)
+
+<Stack.Navigator>
+  <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+  <Stack.Screen name="AllStudents" component={AllStudentsScreen} />
+  <Stack.Screen name="StudentDetail" component={StudentDetailScreen} />
+  <Stack.Screen name="ManageCourses" component={ManageCoursesScreen} />
+  <Stack.Screen name="AddEditCourse" component={AddEditCourseScreen} />
+  <Stack.Screen name="CourseEnrollments" component={CourseEnrollmentsScreen} />
+</Stack.Navigator>
+
+11. Create Admin Screens (new files in src/screens/admin/)
+
+AdminDashboardScreen.tsx -- Stats cards (total students, courses, enrollments) + navigation to admin sections + logout in sidebar.
+
+AllStudentsScreen.tsx -- Search bar + FlatList of all students with name, email, student_id, enrollment count. Tap to view detail.
+
+StudentDetailScreen.tsx -- Student profile info + list of courses they're enrolled in.
+
+ManageCoursesScreen.tsx -- FlatList of all courses with Edit/Delete buttons + floating "Add Course" button. Shows enrollment count per course.
+
+AddEditCourseScreen.tsx -- Form with fields: class_name, professor, duration, rating, description, capacity. Shared for both Add and Edit (receives course via route params for edit, empty for add).
+
+CourseEnrollmentsScreen.tsx -- List of students enrolled in a specific course with "Remove" button per student.
+
+12. Update navigation types -- [src/navigation/types.ts](frontend/src/navigation/types.ts)
+
+Add AdminStackParamList:
+
+export type AdminStackParamList = {
+  AdminDashboard: undefined;
+  AllStudents: undefined;
+  StudentDetail: { studentId: string };
+  ManageCourses: undefined;
+  AddEditCourse: { course?: Course } | undefined;
+  CourseEnrollments: { courseId: string; courseName: string };
+};
+
+13. Update API layer
+
+Add admin API functions (in api.ts or the new RTK Query apiSlice.ts if migrating):
+
+
+
+
+
+getAdminStats(token)
+
+
+
+getAllStudents(token, search?)
+
+
+
+getStudentDetail(token, studentId)
+
+
+
+createCourse(token, input)
+
+
+
+updateCourse(token, courseId, input)
+
+
+
+deleteCourse(token, courseId)
+
+
+
+getCourseEnrollments(token, courseId)
+
+
+
+removeEnrollment(token, enrollmentId)
+
+
+
+File Summary
+
+New files to create:
+
+Backend (6 files):
+
+
+
+
+
+src/middleware/requireAdmin.ts
+
+
+
+src/routes/admin.ts
+
+
+
+src/controllers/adminController.ts
+
+
+
+src/services/adminService.ts
+
+
+
+Update prisma/seed.ts (add admin user)
+
+Frontend (8 files):
+
+
+
+
+
+src/navigation/AdminStack.tsx
+
+
+
+src/screens/admin/AdminDashboardScreen.tsx
+
+
+
+src/screens/admin/AllStudentsScreen.tsx
+
+
+
+src/screens/admin/StudentDetailScreen.tsx
+
+
+
+src/screens/admin/ManageCoursesScreen.tsx
+
+
+
+src/screens/admin/AddEditCourseScreen.tsx
+
+
+
+src/screens/admin/CourseEnrollmentsScreen.tsx
+
+Files to modify:
+
+Backend (4 files):
+
+
+
+
+
+src/app.ts -- register admin routes
+
+
+
+src/services/authService.ts -- add role validation to login
+
+
+
+src/controllers/authController.ts -- pass role to loginUser
+
+
+
+prisma/seed.ts -- seed admin account
+
+Frontend (3 files):
+
+
+
+
+
+src/screens/LoginScreen.tsx -- add Student/Admin toggle
+
+
+
+src/navigation/RootNavigator.tsx -- role-based routing
+
+
+
+src/navigation/types.ts -- add AdminStackParamList
+
+Files to modify (schema):
+
+
+
+
+
+prisma/schema.prisma -- make student_id optional (String?)
+
+
+
+Run prisma migrate dev to apply the migration
+
+No changes needed:
+
+
+
+
+
+JWT logic (already includes role in token)
+
+
+
+requireAuth middleware (already extracts role)
+
+
+
+SignupScreen (stays student-only, still requires student_id)
+
+
+
+Student screens (unchanged)
+

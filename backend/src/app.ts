@@ -7,6 +7,8 @@ import { ZodError } from "zod";
 import { healthRouter } from "./routes/health";
 import { authRouter } from "./routes/auth";
 import { coursesRouter } from "./routes/courses";
+import { enrollmentsRouter } from "./routes/enrollments";
+import { adminRouter } from "./routes/admin";
 import { HttpError } from "./lib/httpError";
 
 export function createApp() {
@@ -34,6 +36,8 @@ export function createApp() {
   );
   app.use("/auth", authRouter);
   app.use("/courses", coursesRouter);
+  app.use("/enrolled", enrollmentsRouter);
+  app.use("/admin", adminRouter);
 
   // 404 handler
   app.use((_req, res) => {
