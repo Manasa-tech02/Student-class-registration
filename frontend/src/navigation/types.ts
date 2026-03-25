@@ -8,6 +8,7 @@ export type AuthStackParamList = {
 
 export type MainStackParamList = {
   Dashboard: undefined;
+  Menu: undefined;
   CourseCatalog: undefined;
   CourseDetail: { course: Course };
   MyCourses: undefined;

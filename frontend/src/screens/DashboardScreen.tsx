@@ -1,21 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Animated,
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useMemo } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { MainScreenProps } from "../navigation/types";
-import { useSelector, useDispatch } from "react-redux";
-import { logout } from "../features/auth/authSlice";
-import { clearTokens } from "../authTokenStorage";
+import { useSelector } from "react-redux";
 import type { RootState } from "../store/store";
-
-const SIDEBAR_WIDTH = 280;
+import { useGetCoursesQuery, useGetMyCoursesQuery } from "../features/courses/coursesApi";
 
 function getGreeting(now = new Date()) {
   const h = now.getHours();
@@ -33,14 +22,16 @@ function getInitials(first?: string, last?: string) {
 
 export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
   const { user } = useSelector((state: RootState) => state.auth);
-  const dispatch = useDispatch();
-  const signOut = async () => {
-    await clearTokens();
-    dispatch(logout());
-  };
-  const [menuOpen, setMenuOpen] = useState(false);
-  const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
+  const {
+    data: coursesData,
+    isLoading: coursesLoading,
+    isError: coursesError,
+  } = useGetCoursesQuery();
+  const {
+    data: myCoursesData,
+    isLoading: myCoursesLoading,
+    isError: myCoursesError,
+  } = useGetMyCoursesQuery();
 
   const greeting = useMemo(() => getGreeting(), []);
   const initials = useMemo(
@@ -53,32 +44,16 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
     return full.length ? full : user.email;
   }, [user]);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: menuOpen ? 0 : -SIDEBAR_WIDTH,
-        duration: 260,
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayAnim, {
-        toValue: menuOpen ? 1 : 0,
-        duration: 260,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [menuOpen, slideAnim, overlayAnim]);
-
-  function closeMenu() {
-    setMenuOpen(false);
-  }
-
   if (!user) return null;
+
+  const totalClasses = coursesData?.courses?.length ?? 0;
+  const enrolledClasses = myCoursesData?.courses?.length ?? 0;
 
   return (
     <View style={styles.container}>
       {/* ── Header Bar ── */}
       <View style={styles.header}>
-        <Pressable onPress={() => setMenuOpen(true)} hitSlop={10}>
+        <Pressable onPress={() => navigation.navigate("Menu")} hitSlop={10}>
           <Ionicons name="menu" size={26} color="#fff" />
         </Pressable>
         <Text style={styles.brandName}>UniFlow</Text>
@@ -94,6 +69,25 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
         <Text style={styles.greeting}>{greeting},</Text>
         <Text style={styles.userName}>{displayName}</Text>
         <Text style={styles.subtitle}>What would you like to do today?</Text>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Total Classes</Text>
+            {coursesLoading ? (
+              <ActivityIndicator size="small" color="#7aa6e3" />
+            ) : (
+              <Text style={styles.statValue}>{coursesError ? 0 : totalClasses}</Text>
+            )}
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Enrolled Classes</Text>
+            {myCoursesLoading ? (
+              <ActivityIndicator size="small" color="#82dca0" />
+            ) : (
+              <Text style={styles.statValue}>{myCoursesError ? 0 : enrolledClasses}</Text>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* ── Quick Actions ── */}
@@ -120,65 +114,6 @@ export function DashboardScreen({ navigation }: MainScreenProps<"Dashboard">) {
           <Text style={styles.actionDesc}>Track your enrolled classes</Text>
         </Pressable>
       </View>
-
-      {/* ── Sidebar Modal ── */}
-      <Modal visible={menuOpen} transparent animationType="none" onRequestClose={closeMenu}>
-        <View style={styles.modalRoot}>
-          <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
-          </Animated.View>
-
-          <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
-            <View style={styles.sidebarHeader}>
-              <View style={styles.sidebarAvatar}>
-                <Text style={styles.sidebarAvatarText}>{initials}</Text>
-              </View>
-              <Text style={styles.sidebarName}>{displayName}</Text>
-              <Text style={styles.sidebarEmail}>{user.email}</Text>
-            </View>
-
-            <View style={styles.sidebarDivider} />
-
-            <Pressable
-              style={({ pressed }) => [styles.sidebarItem, pressed && styles.sidebarItemPressed]}
-              onPress={() => {
-                closeMenu();
-                navigation.navigate("CourseCatalog");
-              }}
-            >
-              <Ionicons name="book-outline" size={22} color="#d9d9d9" />
-              <Text style={styles.sidebarItemText}>Classes</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.sidebarItem, pressed && styles.sidebarItemPressed]}
-              onPress={() => {
-                closeMenu();
-                navigation.navigate("MyCourses");
-              }}
-            >
-              <Ionicons name="school-outline" size={22} color="#d9d9d9" />
-              <Text style={styles.sidebarItemText}>My Courses</Text>
-            </Pressable>
-
-            <View style={{ flex: 1 }} />
-
-            <View style={styles.sidebarDivider} />
-            <Pressable
-              style={({ pressed }) => [styles.sidebarItem, pressed && styles.sidebarItemPressed]}
-              onPress={() => {
-                closeMenu();
-                signOut();
-              }}
-            >
-              <Ionicons name="log-out-outline" size={22} color="#ff8a8a" />
-              <Text style={[styles.sidebarItemText, { color: "#ff8a8a" }]}>Logout</Text>
-            </Pressable>
-
-            <View style={{ height: 30 }} />
-          </Animated.View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -241,11 +176,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
   },
+  statsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 18,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: "#20203a",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#2e2e4a",
+    alignItems: "center",
+  },
+  statLabel: {
+    color: "#7a7a90",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  statValue: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: 4,
+  },
   quickActions: {
     flexDirection: "row",
     paddingHorizontal: 18,
     gap: 14,
-    marginTop: 24,
+    marginTop: 18,
   },
   actionCard: {
     flex: 1,
@@ -276,77 +237,5 @@ const styles = StyleSheet.create({
   actionDesc: {
     color: "#7a7a90",
     fontSize: 12,
-  },
-  modalRoot: {
-    flex: 1,
-    flexDirection: "row",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  sidebar: {
-    width: SIDEBAR_WIDTH,
-    backgroundColor: "#16213e",
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    height: "100%",
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-  },
-  sidebarHeader: {
-    marginBottom: 10,
-  },
-  sidebarAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#7aa6e3",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  sidebarAvatarText: {
-    color: "#0b1b2e",
-    fontWeight: "800",
-    fontSize: 20,
-  },
-  sidebarName: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  sidebarEmail: {
-    color: "#7a7a90",
-    fontSize: 13,
-    marginTop: 3,
-  },
-  sidebarDivider: {
-    height: 1,
-    backgroundColor: "#2e2e4a",
-    marginVertical: 16,
-  },
-  sidebarItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderRadius: 10,
-  },
-  sidebarItemPressed: {
-    backgroundColor: "rgba(122,166,227,0.1)",
-  },
-  sidebarItemText: {
-    color: "#d9d9d9",
-    fontSize: 16,
-    fontWeight: "600",
   },
 });

@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "./types";
 import { DashboardScreen } from "../screens/DashboardScreen";
+import { MenuScreen } from "../screens/MenuScreen";
 import { CourseCatalogScreen } from "../screens/CourseCatalogScreen";
 import { CourseDetailScreen } from "../screens/CourseDetailScreen";
 import { MyCoursesScreen } from "../screens/MyCoursesScreen";
@@ -17,6 +18,7 @@ export function MainStack() {
       }}
     >
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
+      <Stack.Screen name="Menu" component={MenuScreen} />
       <Stack.Screen name="CourseCatalog" component={CourseCatalogScreen} />
       <Stack.Screen name="CourseDetail" component={CourseDetailScreen} />
       <Stack.Screen name="MyCourses" component={MyCoursesScreen} />
