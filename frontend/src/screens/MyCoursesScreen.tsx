@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   ActivityIndicator,
   FlatList,
   Pressable,
@@ -10,9 +11,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { MainScreenProps } from "../navigation/types";
-import { useSelector } from "react-redux";
-import type { RootState } from "../store/store";
-import type { EnrolledCourse } from "../api";
 // Replaced getMyCourses with RTK query
 
 function formatDate(iso: string) {
@@ -34,12 +32,41 @@ function renderStars(rating: number) {
   return stars;
 }
 
-import { useGetMyCoursesQuery } from "../features/courses/coursesApi";
+import { useDropCourseMutation, useGetMyCoursesQuery } from "../features/courses/coursesApi";
 
 export function MyCoursesScreen({ navigation }: MainScreenProps<"MyCourses">) {
   const { data, isLoading: loading, error: rtkError, isFetching, refetch } = useGetMyCoursesQuery();
   const courses = data?.courses || [];
   const error = rtkError ? "Failed to load enrolled courses" : null;
+  const [dropCourseApi] = useDropCourseMutation();
+  const [droppingCourseId, setDroppingCourseId] = useState<string | null>(null);
+
+  async function handleUnenroll(courseId: string, courseName: string) {
+    Alert.alert(
+      "Unenroll",
+      `Are you sure you want to unenroll from "${courseName}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unenroll",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDroppingCourseId(courseId);
+              await dropCourseApi(courseId).unwrap();
+              refetch();
+            } catch (err: any) {
+              const msg = err?.data?.error || err?.message || String(err);
+              Alert.alert("Error", msg);
+            } finally {
+              setDroppingCourseId(null);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -143,6 +170,25 @@ export function MyCoursesScreen({ navigation }: MainScreenProps<"MyCourses">) {
                     {formatDate(item.enrolled_at)}
                   </Text>
                 </View>
+              </View>
+
+              <View style={styles.cardActionRow}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.unenrollBtn,
+                    pressed && styles.unenrollBtnPressed,
+                    droppingCourseId === item.id && styles.unenrollBtnDisabled,
+                  ]}
+                  onPress={() => handleUnenroll(item.id, item.class_name)}
+                  disabled={droppingCourseId === item.id}
+                  hitSlop={10}
+                >
+                  {droppingCourseId === item.id ? (
+                    <ActivityIndicator size="small" color="#ff8a8a" />
+                  ) : (
+                    <Text style={styles.unenrollBtnText}>Unenroll</Text>
+                  )}
+                </Pressable>
               </View>
             </View>
           )}
@@ -319,5 +365,31 @@ const styles = StyleSheet.create({
     color: "#7aa6e3",
     fontSize: 12,
     fontWeight: "600",
+  },
+  cardActionRow: {
+    marginTop: 8,
+    alignItems: "flex-start",
+  },
+  unenrollBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 138, 138, 0.15)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 138, 138, 0.35)",
+  },
+  unenrollBtnPressed: {
+    opacity: 0.85,
+  },
+  unenrollBtnDisabled: {
+    opacity: 0.65,
+  },
+  unenrollBtnText: {
+    color: "#ff8a8a",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });
