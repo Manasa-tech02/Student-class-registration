@@ -6,6 +6,9 @@ import { logout } from "../features/auth/authSlice";
 // 1. Create the fundamental fetch call, automatically injecting the access token
 const baseQuery = fetchBaseQuery({
   baseUrl: process.env.EXPO_PUBLIC_API_URL,
+  // Prevent "Loading..." from hanging forever if the backend is unreachable.
+  // RTK Query will abort the request and return an error.
+  timeout: 15000,
   prepareHeaders: async (headers) => {
     const token = await getAccessToken();
     if (token) {

@@ -1,11 +1,12 @@
 import { prisma } from "../lib/prisma";
+import { withPrismaRetry } from "../lib/prismaRetry";
 import { HttpError } from "../lib/httpError";
 
 export async function getDashboardStats() {
   const [studentCount, courseCount, enrollmentCount] = await Promise.all([
-    prisma.user.count({ where: { role: "student" } }),
-    prisma.course.count(),
-    prisma.enrollment.count(),
+    withPrismaRetry(() => prisma.user.count({ where: { role: "student" } })),
+    withPrismaRetry(() => prisma.course.count()),
+    withPrismaRetry(() => prisma.enrollment.count()),
   ]);
 
   return { studentCount, courseCount, enrollmentCount };
@@ -24,19 +25,21 @@ export async function getAllStudents(search?: string) {
       }
     : { role: "student" as const };
 
-  const students = await prisma.user.findMany({
-    where,
-    orderBy: { created_at: "desc" },
-    select: {
-      id: true,
-      first_name: true,
-      last_name: true,
-      email: true,
-      student_id: true,
-      created_at: true,
-      _count: { select: { enrollments: true } },
-    },
-  });
+  const students = await withPrismaRetry(() =>
+    prisma.user.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        student_id: true,
+        created_at: true,
+        _count: { select: { enrollments: true } },
+      },
+    }),
+  );
 
   return students.map((s) => ({
     id: s.id,
@@ -50,34 +53,36 @@ export async function getAllStudents(search?: string) {
 }
 
 export async function getStudentDetail(studentId: string) {
-  const student = await prisma.user.findUnique({
-    where: { id: studentId },
-    select: {
-      id: true,
-      first_name: true,
-      last_name: true,
-      email: true,
-      student_id: true,
-      role: true,
-      created_at: true,
-      enrollments: {
-        orderBy: { created_at: "desc" },
-        select: {
-          id: true,
-          created_at: true,
-          course: {
-            select: {
-              id: true,
-              class_name: true,
-              professor: true,
-              duration: true,
-              rating: true,
+  const student = await withPrismaRetry(() =>
+    prisma.user.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        student_id: true,
+        role: true,
+        created_at: true,
+        enrollments: {
+          orderBy: { created_at: "desc" },
+          select: {
+            id: true,
+            created_at: true,
+            course: {
+              select: {
+                id: true,
+                class_name: true,
+                professor: true,
+                duration: true,
+                rating: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  );
 
   if (!student) throw new HttpError(404, "Student not found");
   if (student.role !== "student") throw new HttpError(400, "User is not a student");
@@ -100,19 +105,21 @@ export async function createCourse(input: {
   description: string;
   capacity: number;
 }) {
-  return prisma.course.create({
-    data: input,
-    select: {
-      id: true,
-      class_name: true,
-      professor: true,
-      duration: true,
-      rating: true,
-      description: true,
-      capacity: true,
-      created_at: true,
-    },
-  });
+  return withPrismaRetry(() =>
+    prisma.course.create({
+      data: input,
+      select: {
+        id: true,
+        class_name: true,
+        professor: true,
+        duration: true,
+        rating: true,
+        description: true,
+        capacity: true,
+        created_at: true,
+      },
+    }),
+  );
 }
 
 export async function updateCourse(
@@ -126,54 +133,58 @@ export async function updateCourse(
     capacity?: number;
   },
 ) {
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await withPrismaRetry(() => prisma.course.findUnique({ where: { id: courseId } }));
   if (!course) throw new HttpError(404, "Course not found");
 
-  return prisma.course.update({
-    where: { id: courseId },
-    data: input,
-    select: {
-      id: true,
-      class_name: true,
-      professor: true,
-      duration: true,
-      rating: true,
-      description: true,
-      capacity: true,
-      created_at: true,
-    },
-  });
+  return withPrismaRetry(() =>
+    prisma.course.update({
+      where: { id: courseId },
+      data: input,
+      select: {
+        id: true,
+        class_name: true,
+        professor: true,
+        duration: true,
+        rating: true,
+        description: true,
+        capacity: true,
+        created_at: true,
+      },
+    }),
+  );
 }
 
 export async function deleteCourse(courseId: string) {
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await withPrismaRetry(() => prisma.course.findUnique({ where: { id: courseId } }));
   if (!course) throw new HttpError(404, "Course not found");
 
-  await prisma.enrollment.deleteMany({ where: { course_id: courseId } });
-  await prisma.course.delete({ where: { id: courseId } });
+  await withPrismaRetry(() => prisma.enrollment.deleteMany({ where: { course_id: courseId } }));
+  await withPrismaRetry(() => prisma.course.delete({ where: { id: courseId } }));
 }
 
 export async function getCourseEnrollments(courseId: string) {
-  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  const course = await withPrismaRetry(() => prisma.course.findUnique({ where: { id: courseId } }));
   if (!course) throw new HttpError(404, "Course not found");
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { course_id: courseId },
-    orderBy: { created_at: "desc" },
-    select: {
-      id: true,
-      created_at: true,
-      student: {
-        select: {
-          id: true,
-          first_name: true,
-          last_name: true,
-          email: true,
-          student_id: true,
+  const enrollments = await withPrismaRetry(() =>
+    prisma.enrollment.findMany({
+      where: { course_id: courseId },
+      orderBy: { created_at: "desc" },
+      select: {
+        id: true,
+        created_at: true,
+        student: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            student_id: true,
+          },
         },
       },
-    },
-  });
+    }),
+  );
 
   return {
     course_id: course.id,
@@ -189,11 +200,13 @@ export async function getCourseEnrollments(courseId: string) {
 }
 
 export async function removeEnrollment(enrollmentId: string) {
-  const enrollment = await prisma.enrollment.findUnique({
-    where: { id: enrollmentId },
-  });
+  const enrollment = await withPrismaRetry(() =>
+    prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+    }),
+  );
 
   if (!enrollment) throw new HttpError(404, "Enrollment not found");
 
-  await prisma.enrollment.delete({ where: { id: enrollmentId } });
+  await withPrismaRetry(() => prisma.enrollment.delete({ where: { id: enrollmentId } }));
 }

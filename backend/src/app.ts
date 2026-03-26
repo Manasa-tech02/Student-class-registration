@@ -60,8 +60,18 @@ export function createApp() {
       message = "Invalid request";
       details = err.flatten();
     } else if (err instanceof Error && process.env.NODE_ENV !== "production") {
-      // In dev, it's useful to show real error messages.
-      message = err.message;
+      // Helps us debug Prisma invocation/input issues quickly in dev.
+      // eslint-disable-next-line no-console
+      console.error(err);
+      // If it's a database connectivity problem, make it user-friendly.
+      const code = (err as any)?.code;
+      if (code === "ETIMEDOUT" || code === "P1001") {
+        statusCode = 503;
+        message = "Database temporarily unavailable. Please try again in a moment.";
+      } else {
+        // In dev, it's useful to show real error messages.
+        message = err.message;
+      }
     }
 
     // Avoid exposing sensitive details in production.
