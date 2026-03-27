@@ -12,6 +12,11 @@ The system is split into three main parts:
 - Backend: Node.js + Express REST API
 - Database: PostgreSQL accessed via Prisma ORM
 
+Why split the system this way:
+- Frontend focuses on user experience (screens, navigation, and presenting course/enrollment data).
+- Backend focuses on business rules, authentication/authorization, and safe data access.
+- Database focuses on durable storage and relationships between users, courses, and enrollments.
+
 ---
 
 ## 2. Implemented Features
@@ -65,40 +70,46 @@ Seeded admin account:
 
 ### 3.1 Frontend (Mobile App)
 - Expo + React Native for cross-platform mobile UI.
-- React Navigation (`@react-navigation/native` and `@react-navigation/native-stack`) to switch between:
-  - Auth flow
-  - Student flow
-  - Admin flow
+- React Navigation (`@react-navigation/native` and `@react-navigation/native-stack`) to support role-based app flows:
+  - Auth flow (Login/Signup)
+  - Student flow (Dashboard, Course Catalog, Course Detail, My Courses)
+  - Admin flow (Admin Dashboard, Students, Student Detail, Course Management)
 - Redux Toolkit:
-  - RTK Query for API calls, caching, and automatic re-fetch behavior.
-  - Redux slices for auth state (`authSlice`).
+  - RTK Query for calling the backend, caching results, and handling re-fetch/invalidation.
+  - `authSlice` to keep the logged-in user profile and token state in one place.
 - Secure token storage:
-  - `expo-secure-store` stores the access token + refresh token on-device.
+  - `expo-secure-store` stores the access token and refresh token safely on the device.
 
-Why this frontend setup?
-- RTK Query keeps network logic centralized and reduces manual state management.
-- SecureStore prevents tokens from being stored in plain text.
-- Navigation stacks provide clean separation of student vs admin UX.
+Purpose of these choices:
+- Expo/React Native lets the app run on mobile platforms using one codebase, which reduces development time and maintenance.
+- React Navigation provides a clear and user-friendly UX separation between students and admins, based on authentication state.
+- RTK Query reduces boilerplate by handling loading/error states for API calls and keeping the UI in sync when data changes.
+- Redux Toolkit keeps app state predictable (especially auth state) so the UI updates correctly after login/logout or token refresh.
+- SecureStore is used because JWT tokens are sensitive; storing them safely reduces the risk of token theft.
 
 ### 3.2 Backend (REST API)
 - Express (HTTP server + routing)
 - TypeScript for type safety across controllers/services/middleware.
 - Security & hardening middleware:
-  - `helmet` for safer HTTP headers
-  - `cors` for controlled cross-origin access
-  - `express-rate-limit` on `/auth` routes to reduce brute-force risks
+  - `helmet` for safer HTTP headers.
+  - `cors` to control which origins can access the API.
+  - `express-rate-limit` on `/auth` routes to limit repeated login attempts.
 - Input validation:
   - `zod` schemas validate request bodies before calling services.
 - Password security:
-  - `bcrypt` hashes passwords before saving to the database.
+  - `bcrypt` hashes passwords before saving them to the database.
 - Stateless authentication:
-  - JWT access tokens (short lived)
-  - JWT refresh tokens (longer lived)
+  - JWT access tokens (short lived).
+  - JWT refresh tokens (longer lived).
 
-Why this backend setup?
-- JWT-based auth keeps the backend stateless (easier horizontal scaling).
-- Validation + password hashing reduce security risk.
-- Separation into routes/controllers/services makes the code maintainable.
+Purpose of these choices:
+- Express is used to build a straightforward REST API that the mobile app can call over HTTP.
+- TypeScript helps prevent common bugs by enforcing types across request handling, business logic, and responses.
+- Helmet/CORS/rate-limiting address security and abuse prevention so the system is safer for real users.
+- Zod validation prevents malformed requests from reaching the database layer (reducing crashes and bad data).
+- Bcrypt ensures user passwords are not stored as plain text, protecting users even if the database is exposed.
+- JWT authentication enables stateless request verification. That improves reliability and makes it easier to scale the backend because token verification does not require server-side session storage.
+- The routes/controller/service separation keeps the code maintainable: controllers handle HTTP shape, services handle business rules, and Prisma handles database operations.
 
 ### 3.3 Database Layer
 - PostgreSQL as the relational database.
@@ -108,9 +119,10 @@ Why this backend setup?
 - Prisma adapter:
   - `@prisma/adapter-pg` connects Prisma to PostgreSQL.
 
-Why Prisma + PostgreSQL?
-- Courses and enrollments naturally fit relational data modeling (many-to-many via `Enrollment`).
-- Prisma provides type-safe queries and reduces runtime mistakes.
+Purpose of these choices:
+- PostgreSQL is a strong fit for relational data like users, courses, and enrollments, where enrollments act like a many-to-many relationship.
+- Prisma reduces development complexity by providing a typed ORM layer. This makes queries safer and reduces runtime errors (especially when selecting only the fields needed by the UI).
+- Using Prisma also centralizes schema changes in `schema.prisma`, making migrations and documentation clearer.
 
 ---
 
@@ -183,17 +195,18 @@ This uniqueness is what enforces “no duplicate enrollment” at the database l
 
 ### 6.1 Token persistence + automatic refresh (client side)
 - On app start:
-  - the app reads an access token from `expo-secure-store`
-  - it calls `GET /auth/me` to load the user profile
+  - the app reads an access token from `expo-secure-store`.
+  - it calls `GET /auth/me` to load the user profile.
 - During API usage:
   - the RTK Query base query attaches `Authorization: Bearer <accessToken>`
   - if the backend responds with `401`, the client calls `POST /auth/refresh`
   - if refresh succeeds, tokens are updated and the original request is retried
   - if refresh fails, tokens are cleared and the user is logged out
 
-Why this matters:
-- Users remain logged in without manually re-authenticating.
-- Token expiration is handled centrally by RTK Query.
+Purpose of this design:
+- It gives a good user experience by keeping sessions alive automatically.
+- It prevents the UI from having to manually handle token expiration for every screen.
+- It centralizes security-sensitive behavior (token refresh and clearing) inside the API layer.
 
 ### 6.2 Role-based navigation
 - `RootNavigator` checks the stored auth state:
@@ -201,14 +214,18 @@ Why this matters:
   - token + `user.role === "admin"` -> `AdminStack`
   - token + `user.role !== "admin"` -> `MainStack` (student)
 
+Purpose of this design:
+- The user never sees screens they cannot access.
+- The UI becomes simpler because screens can assume the correct role (student vs admin).
+
 ---
 
 ## 7. Security Notes / Important Implementation Details
 - Passwords are never stored in plain text:
-  - `bcrypt.hash(password, 10)` in `authService.signupUser`
-  - `bcrypt.compare` in `authService.loginUser`
-- Request bodies are validated:
-  - controller layer uses `zod.parse(...)`
+  - `bcrypt.hash(password, 10)` in `authService.signupUser`.
+  - `bcrypt.compare` in `authService.loginUser`.
+- Request bodies are validated in controllers:
+  - controller layer uses `zod.parse(...)`.
 - `/auth` is rate-limited to reduce brute-force attempts.
 - JWT access tokens have a default expiry of `15 minutes`; refresh tokens default to `7 days`.
 - `backend/src/middleware/requireAuth.ts` validates tokens and populates `req.user = { id, role }`.
