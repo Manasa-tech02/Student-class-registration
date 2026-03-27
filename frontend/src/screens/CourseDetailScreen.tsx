@@ -34,11 +34,15 @@ export function CourseDetailScreen({ navigation, route }: MainScreenProps<"Cours
     try {
       if (isRegistered) return;
       await enrollInCourseApi(course.id).unwrap();
+      // Enrollment succeeded; send user back to dashboard.
+      await refetch();
+      navigation.navigate("Dashboard");
     } catch (e: any) {
       const msg = e?.data?.error || e?.message || String(e);
       if (msg.toLowerCase().includes("already enrolled")) {
         setError(null);
         await refetch(); // Ensure UI state is consistent with backend.
+        navigation.navigate("Dashboard");
         return;
       }
       setError(msg);
