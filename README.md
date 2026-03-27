@@ -100,6 +100,46 @@ student-registration-app/
 - `PUT /admin/courses/:id`
 - `DELETE /admin/courses/:id`
 
+## Database Schema
+
+The backend uses PostgreSQL with Prisma. The core tables are:
+
+### `students` (Prisma `User`)
+
+- `id` (String, PK, `cuid()`)
+- `first_name` (String)
+- `last_name` (String)
+- `email` (String, unique)
+- `student_id` (String, unique, nullable)
+- `password` (String, hashed)
+- `role` (String, default: `student`)
+- `created_at` (DateTime, default: `now()`)
+
+### `courses` (Prisma `Course`)
+
+- `id` (String, PK, `cuid()`)
+- `class_name` (String)
+- `professor` (String)
+- `duration` (String)
+- `rating` (Float)
+- `description` (String)
+- `capacity` (Int)
+- `created_at` (DateTime, default: `now()`)
+
+### `enrollments` (Prisma `Enrollment`)
+
+- `id` (String, PK, `cuid()`)
+- `student_id` (String, FK -> `students.id`)
+- `course_id` (String, FK -> `courses.id`)
+- `created_at` (DateTime, default: `now()`)
+- Unique constraint: (`student_id`, `course_id`)
+
+### Relationships
+
+- One `student` can have many `enrollments`
+- One `course` can have many `enrollments`
+- Each `enrollment` belongs to exactly one `student` and one `course`
+
 ## Environment Variables
 
 Create `.env` files in both apps.
