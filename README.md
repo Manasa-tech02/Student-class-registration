@@ -217,6 +217,24 @@ Then run on device/emulator:
 npm run android
 ```
 
+## Production Release (Brief)
+
+Current status: project is in development mode (`frontend` points to local backend URL, backend runs on local `:3000`, and database is Neon/PostgreSQL via `DATABASE_URL`).
+
+1. Deploy backend to a cloud host (Render/Railway/Fly) and get HTTPS API URL.
+2. Keep Neon/PostgreSQL as production database and set backend `DATABASE_URL`.
+3. Set backend production env vars: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGIN`, token expiry values.
+4. Run database migrations in production: `npx prisma migrate deploy`.
+5. Update frontend API URL to backend production URL:
+   - `EXPO_PUBLIC_API_URL=https://<your-backend-domain>`
+6. Configure EAS and create release builds:
+   - `npx eas build:configure`
+   - `npx eas build -p android --profile production`
+   - `npx eas build -p ios --profile production`
+7. Test release build on real devices and then submit:
+   - `npx eas submit -p android`
+   - `npx eas submit -p ios`
+
 ## Security Notes
 
 - Passwords are hashed with bcrypt

@@ -9,9 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { MainScreenProps } from "../navigation/types";
-import { useSelector } from "react-redux";
-import type { RootState } from "../store/store";
-import { useEnrollInCourseMutation } from "../features/courses/coursesApi";
+import { useEnrollInCourseMutation, useGetMyCoursesQuery } from "../features/courses/coursesApi";
 
 function renderStars(rating: number) {
   const full = Math.floor(rating);
@@ -26,21 +24,24 @@ function renderStars(rating: number) {
 export function CourseDetailScreen({ navigation, route }: MainScreenProps<"CourseDetail">) {
   const { course } = route.params;
   const [enrollInCourseApi, { isLoading: enrolling }] = useEnrollInCourseMutation();
-  const [enrolled, setEnrolled] = useState(false);
+  const { data: myCoursesData, isLoading: myCoursesLoading, refetch } = useGetMyCoursesQuery();
   const [error, setError] = useState<string | null>(null);
+
+  const isRegistered = myCoursesData?.courses?.some((c) => c.id === course.id) ?? false;
 
   async function handleEnroll() {
     setError(null);
     try {
+      if (isRegistered) return;
       await enrollInCourseApi(course.id).unwrap();
-      setEnrolled(true);
     } catch (e: any) {
       const msg = e?.data?.error || e?.message || String(e);
       if (msg.toLowerCase().includes("already enrolled")) {
-        setEnrolled(true);
-      } else {
-        setError(msg);
+        setError(null);
+        await refetch(); // Ensure UI state is consistent with backend.
+        return;
       }
+      setError(msg);
     }
   }
 
@@ -111,18 +112,18 @@ export function CourseDetailScreen({ navigation, route }: MainScreenProps<"Cours
         <Pressable
           style={({ pressed }) => [
             styles.enrollBtn,
-            enrolled && styles.enrolledBtn,
-            pressed && !enrolled && !enrolling && styles.enrollBtnPressed,
+            isRegistered && styles.enrolledBtn,
+            pressed && !isRegistered && !enrolling && styles.enrollBtnPressed,
           ]}
-          onPress={enrolled || enrolling ? undefined : handleEnroll}
-          disabled={enrolled || enrolling}
+          onPress={isRegistered || myCoursesLoading || enrolling ? undefined : handleEnroll}
+          disabled={isRegistered || myCoursesLoading || enrolling}
         >
           {enrolling ? (
             <ActivityIndicator color="#0b1b2e" />
-          ) : enrolled ? (
+          ) : isRegistered ? (
             <View style={styles.enrolledContent}>
               <Ionicons name="checkmark-circle" size={22} color="#0b1b2e" />
-              <Text style={styles.enrollBtnText}>Enrolled</Text>
+              <Text style={styles.enrollBtnText}>Registered</Text>
             </View>
           ) : (
             <Text style={styles.enrollBtnText}>Register for this Course</Text>

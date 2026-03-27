@@ -7,6 +7,7 @@ import { useLoginMutation, useLazyGetMeQuery } from "../features/auth/authApi";
 import { saveTokens, clearTokens } from "../authTokenStorage";
 import { LabeledInput } from "../components/LabeledInput";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { getApiErrorMessage } from "../getApiErrorMessage";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -115,7 +116,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<"Login">) {
             } catch (e: any) {
               await clearTokens();
               dispatch(logout());
-              setError(e?.data?.error || e?.message || "Failed to sign in");
+              setError(getApiErrorMessage(e, "Failed to sign in"));
             } finally {
               setSubmitting(false);
             }

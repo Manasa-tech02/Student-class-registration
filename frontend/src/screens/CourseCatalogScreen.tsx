@@ -10,14 +10,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { MainScreenProps } from "../navigation/types";
-import { useSelector } from "react-redux";
-import type { RootState } from "../store/store";
 import type { Course } from "../api";
-import { useGetCoursesQuery } from "../features/courses/coursesApi";
+import { useGetCoursesQuery, useGetMyCoursesQuery } from "../features/courses/coursesApi";
 
 export function CourseCatalogScreen({ navigation }: MainScreenProps<"CourseCatalog">) {
   const { data, isLoading: loading, error: rtkError } = useGetCoursesQuery();
   const courses = data?.courses || [];
+  const { data: myCoursesData, isLoading: myCoursesLoading } = useGetMyCoursesQuery();
+  const registeredCourseIds = new Set((myCoursesData?.courses ?? []).map((c) => c.id));
   const error = rtkError ? "Failed to load courses" : null;
   const [search, setSearch] = useState("");
 
@@ -96,8 +96,21 @@ export function CourseCatalogScreen({ navigation }: MainScreenProps<"CourseCatal
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              onPress={() => navigation.navigate("CourseDetail", { course: item })}
+              style={({ pressed }) => [
+                styles.card,
+                pressed && styles.cardPressed,
+                !myCoursesLoading && registeredCourseIds.has(item.id) && styles.cardRegistered,
+              ]}
+              onPress={() => {
+                // If enrolled-courses data isn't loaded yet, avoid navigating to a screen
+                // that would allow an unnecessary enroll API call.
+                if (myCoursesLoading) return;
+
+                // If the user is already enrolled, do not navigate to course details.
+                if (registeredCourseIds.has(item.id)) return;
+
+                navigation.navigate("CourseDetail", { course: item });
+              }}
             >
               <View style={styles.cardTop}>
                 <View style={styles.cardBadge}>
@@ -129,9 +142,18 @@ export function CourseCatalogScreen({ navigation }: MainScreenProps<"CourseCatal
                   ))}
                   <Text style={styles.ratingNum}>{item.rating.toFixed(1)}</Text>
                 </View>
-                <View style={styles.capacityBadge}>
-                  <Ionicons name="people-outline" size={13} color="#82dca0" />
-                  <Text style={styles.capacityText}>{item.capacity} seats</Text>
+                <View style={styles.bottomRight}>
+                  <View style={styles.capacityBadge}>
+                    <Ionicons name="people-outline" size={13} color="#82dca0" />
+                    <Text style={styles.capacityText}>{item.capacity} seats</Text>
+                  </View>
+
+                  {myCoursesLoading ? null : registeredCourseIds.has(item.id) ? (
+                    <View style={styles.registeredBadge}>
+                      <Ionicons name="checkmark-circle" size={13} color="#0b1b2e" />
+                      <Text style={styles.registeredText}>Registered</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             </Pressable>
@@ -214,6 +236,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2e2e4a",
   },
+  cardRegistered: {
+    opacity: 0.85,
+  },
   cardPressed: {
     borderColor: "#7aa6e3",
     backgroundColor: "#252545",
@@ -281,5 +306,26 @@ const styles = StyleSheet.create({
     color: "#82dca0",
     fontSize: 12,
     fontWeight: "600",
+  },
+  bottomRight: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  registeredBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(130,220,160,0.15)",
+    borderColor: "rgba(130,220,160,0.35)",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  registeredText: {
+    color: "#82dca0",
+    fontSize: 12,
+    fontWeight: "800",
   },
 });
